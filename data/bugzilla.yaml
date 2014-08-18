@@ -1,0 +1,37 @@
+#http://fab.wmflabs.org/T434
+
+#foo'd for testing
+assigned_to_lists:
+  wikibugs-l@lists.wikimedia.org
+  wikidata-bugs@lists.wikimedia.org
+  Pywikipedia-bugs@lists.wikimedia.org
+  tools-nlwikibots@lists.wikimedia.org
+
+keywords_to_tags:
+  accessibility
+  browser-test-bug
+  community-consensus-needed
+  crosswiki
+  design
+  easy
+  hiphop
+  i18n
+  ipv6
+  javascript
+  mobile
+  need-volunteer
+  newparser
+  newphp
+  ops
+  parser
+  performance
+  platformeng
+  schema-change
+  shell
+  testme
+  tracking
+  upstream
+
+status_to_tags:
+  patch_to_review
+  verified

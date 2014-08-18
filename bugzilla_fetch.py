@@ -1,4 +1,14 @@
 #!/usr/bin/env python
+"""
+
+2014 Chase Pettet
+
+
+This script is a WIP for getting Bugzilla information
+with the end goal of it living in phabricator
+
+"""
+
 import yaml
 import ast
 import base64
@@ -111,7 +121,6 @@ def main(bugid):
         declined	we have decided not too -- even though we could
         """
 
-        # XXX: verified gets verified project
         statuses = {'new': 'open',
                     'resolved': 'resolved',
                     'reopened': 'open',
@@ -144,16 +153,42 @@ def main(bugid):
             log(project_name + ' exists')
         return phid
 
+    def upload_file(name, data):
+        #print type(data)
+        encoded = base64.b64encode(data)
+        return phab.file.upload(name=name, data_base64=encoded)
+
     #grabbing one bug at a time for now
     buginfo = server.Bug.get(kwargs)['bugs']	
     buginfo =  buginfo[0]
-    print buginfo
+    #print buginfo
+
     com = server.Bug.comments(kwargs)['bugs'][bugid]['comments']
     bug_id = com[0]['bug_id']
 
+    #http://www.bugzilla.org/docs/tip/en/html/api/Bugzilla/WebService/Bug.html#attachments
+    attached = server.Bug.attachments(kwargs)['bugs'][bugid]
+
+    #process ticket uploads to map attach id to phab file id
+    uploads = {}
+    for a in attached:
+        if a['is_private']:
+            print 'oh no private!!!!'
+        upload = upload_file(a['file_name'], str(a['data']))
+        finfo = phab.file.info(phid=upload.response).response
+        a['phid'] = finfo['phid']
+        a['name'] = finfo['name']
+        a['objectName'] = finfo['objectName']
+        uploads[a['id']] = a
+
+    log('Attachment count: ' + str(len(uploads.keys())))
     #have to do for json
     buginfo['last_change_time'] = datetime_to_epoch(buginfo['last_change_time'])
     buginfo['creation_time'] = datetime_to_epoch(buginfo['creation_time'])
+
+
+
+
 
     for c in com:
         c['creation_time'] = datetime_to_epoch(c['creation_time'])
@@ -185,8 +220,8 @@ def main(bugid):
         d.write(str(json.dumps(buginfo)))
 
     #XXX: if is patch_to_review add that project
-    if buginfo['status'] == 'patch_to_review':
-        ptags.append(('patch_to_review', None))
+    if buginfo['status'].lower() == 'patch_to_review':
+        ptags.append(('patch_to_review', 'tag', 'green'))
 
     if buginfo['status'] == 'verified':
         ptags.append(('verified', 'tag'))
@@ -226,6 +261,14 @@ def main(bugid):
     priority = priority_convert(buginfo['priority'])
     title = buginfo['summary']
 
+    def find_attachment(text):
+        import re
+        a = re.search('Created\sattachment\s(\d+)', text)
+        if a:
+            return a.group(1)
+        else:
+            return ''
+
     clean_com = []
     for c in com:
         if not isinstance(c, dict):
@@ -241,9 +284,19 @@ def main(bugid):
             clean_c['bug_id'] = c['bug_id']
 
         if c['is_private']:
-            clean_c['text'] = '_hidden_'
-        else:
-            clean_c['text'] = c['text']
+            c['text'] = '_hidden_'
+
+        attachment = find_attachment(c['text'])
+        if attachment:
+            fmt_text = []
+            text = c['text'].splitlines()
+            for t in text:
+                if not t.startswith('Created attachment'):
+                    fmt_text.append(t)
+            c['text'] = '\n'.join(fmt_text)
+            clean_c['attachment'] = attachment
+
+        clean_c['text'] = c['text']
         clean_com.append(clean_c)
 
     log('project: ' + buginfo['project'])
@@ -283,8 +336,12 @@ def main(bugid):
     for p in ptags:
         phids.append(ensure_project(p[0]))
         if p[1] is not None:
+            if len(p) > 2:
+                color = p[2]
+            else:
+                color = 'blue'
             log("Setting project %s icon to %s" % (p[0], p[1]))
-            set_project_icon(p[0], icon=p[1])
+            set_project_icon(p[0], icon=p[1], color=color)
 
     log("ptags: " + str(ptags))
     log("phids: " + str(phids))
@@ -308,7 +365,11 @@ def main(bugid):
     for c in clean_com:
         log('-------------------------------------')
         created = epoch_to_datetime(c['creation_time'])
-        comment(ticket['id'], "**%s** wrote on `%s`\n\n%s" % (c['author'], created, c['text']))
+        comment_body = "**%s** wrote on `%s`\n\n%s" % (c['author'], created, c['text'])
+        if 'attachment' in c:
+            cattached = uploads[int(c['attachment'])]
+            comment_body += "\n\n**Attached**: {%s}" % (cattached['objectName'])
+        comment(ticket['id'], comment_body)
 
     log(str(ticket['id']) + str(buginfo['status'])) 
 
@@ -321,6 +382,7 @@ if sys.stdin.isatty():
 else:
     bugs = sys.stdin.read().strip('\n').strip().split()
 
-for i in bugs:
-    if i.isdigit():
-        main(i)
+main('1')
+#for i in bugs:
+#    if i.isdigit():
+#        main(i)
