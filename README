@@ -1,0 +1,7 @@
+This repo will eventually be used for tooling surrounding
+development in phabricator and related tools.
+
+For the moment it is being used to house migration scripts
+and associated logic.
+
+Everything here is a work in progress.
