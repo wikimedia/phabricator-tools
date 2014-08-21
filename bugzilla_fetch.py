@@ -10,24 +10,18 @@ with the end goal of it living in phabricator
 """
 import time
 import yaml
-import ast
-import base64
 import json
-import datetime
 import sys
 import xmlrpclib
-import subprocess
 import os
-import re
-import MySQLdb
 from wmfphablib import log
 from wmfphablib import bzlib
 from wmfphablib import epoch_to_datetime
 from wmfphablib import datetime_to_epoch
 from phabdb import phdb
-from phabdb import mailinglist_phid
-from phabdb import set_project_icon
-from email.parser import Parser
+#from phabdb import mailinglist_phid
+#from phabdb import set_project_icon
+#from email.parser import Parser
 import ConfigParser
 
 def fetch(bugid):
@@ -59,7 +53,6 @@ def fetch(bugid):
 
     # set ticket status for priority import
     status = bzlib.status_convert(buginfo['status'])
-    priority = bzlib.priority_convert(buginfo['priority'])
 
     if status != 'open':
         creation_priority = 0

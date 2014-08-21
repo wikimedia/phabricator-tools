@@ -1,5 +1,10 @@
-from phabdb import archive_project
+import os, sys
+path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append('/'.join(path.split('/')[:-1]))
+import phabdb
+print phabdb.phid_by_custom_field('1001')
 
+#from phabdb import archive_project
 #print archive_project('greenproject')
 
 #set project tag and color

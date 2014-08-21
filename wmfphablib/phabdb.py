@@ -1,11 +1,18 @@
 #!/usr/bin/env python
 import sys
 import MySQLdb
-from email.parser import Parser
-import ConfigParser
 import traceback
 import syslog
 
+
+def phid_by_custom_field(custom_value):
+    p = phdb(db="phabricator_maniphest")
+    phid = p.sql_x("SELECT * from maniphest_customfieldstringindex WHERE indexValue = %s",
+                  (custom_value))
+    if phid:
+        phid = phid[1]
+    p.close()
+    return phid
 
 def mailinglist_phid(list_email):
     p = phdb(db="phabricator_metamta")
