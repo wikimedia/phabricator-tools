@@ -20,21 +20,15 @@ import subprocess
 import os
 import re
 import MySQLdb
+from wmfphablib import log
+from wmfphablib import bzlib
+from wmfphablib import epoch_to_datetime
+from wmfphablib import datetime_to_epoch
 from phabdb import phdb
 from phabdb import mailinglist_phid
 from phabdb import set_project_icon
 from email.parser import Parser
 import ConfigParser
-
-def log(msg):
-    import syslog
-    msg = unicode(msg)
-    if '-v' in sys.argv:
-        try:
-            syslog.syslog(msg)
-            print '-> ', msg
-        except:
-            print 'error logging output'
 
 def fetch(bugid):
 
@@ -47,52 +41,11 @@ def fetch(bugid):
                              'password': parser.get(parser_mode, 'Bugzilla_password')})
 
     token = token_data['token']
-
-    #kwargs = { 'ids': [bugid],
-    #           'Bugzilla_login': parser.get(parser_mode, 'Bugzilla_login'),
-    #           'Bugzilla_password': parser.get(parser_mode, 'Bugzilla_password')}
-
     kwargs = { 'ids': [bugid], 'Bugzilla_token': token }
-
-    def datetime_to_epoch(date_time):
-        return str((date_time - datetime.datetime(1970,1,1)).total_seconds())
-
-    def status_convert(bz_status):
-        """
-        UNCONFIRMED (default)   Open + Needs Triage (default)
-        NEW     Open
-        ASSIGNED                open
-        PATCH_TO_REVIEW         open
-        NEED_INFO               needs_info
-        RESOLVED FIXED          resolved
-        RESOLVED INVALID        invalid
-        RESOLVED WONTFIX        declined
-        RESOLVED WORKSFORME     resolved
-        RESOLVED DUPLICATE      closed
-
-        needs_info      stalled
-        resolved        closed
-        invalid         no historical value will be purged eventually (spam, etc)
-        declined        we have decided not too -- even though we could
-        """
-
-        statuses = {'new': 'open',
-                    'resolved': 'resolved',
-                    'reopened': 'open',
-                    'closed': 'resolved',
-                    'need_info': 'needs_info',
-                    'verified': 'resolved',
-                    'assigned': 'open',
-                    'unconfirmed': 'open',
-                    'patch_to_review': 'open'}
-
-        return statuses[bz_status.lower()]
-
 
     #grabbing one bug at a time for now
     buginfo = server.Bug.get(kwargs)['bugs']	
     buginfo =  buginfo[0]
-
     com = server.Bug.comments(kwargs)['bugs'][bugid]['comments']
     bug_id = com[0]['bug_id']
 
@@ -105,25 +58,34 @@ def fetch(bugid):
         c['time'] = datetime_to_epoch(c['time'])
 
     # set ticket status for priority import
-    status = status_convert(buginfo['status'])
+    status = bzlib.status_convert(buginfo['status'])
+    priority = bzlib.priority_convert(buginfo['priority'])
+
     if status != 'open':
-        import_priority = 0
+        creation_priority = 0
     else:
-        import_priority = 1
+        creation_priority = 1
 
     pmig = phdb()
-    insert_values =  (bugid, import_priority, json.dumps(buginfo), json.dumps(com))
+    insert_values =  (bugid, creation_priority, json.dumps(buginfo), json.dumps(com))
     pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
                insert_values)
     pmig.close()
     return True
 
-def run_fetch(bugid, tries=3):
+def run_fetch(bugid, tries=1):
     if tries == 0:
+        pmig = phdb()
+        insert_values =  (bugid, 6, '', '')
+        pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
+                   insert_values)
+        pmig.close()
         print 'failed to grab %s' % (bugid,)
         return False
     try:
         if fetch(bugid):
+            print time.time()
+            print 'done with %s' % (bugid,)
             return True
     except Exception as e:
         tries -= 1
@@ -136,17 +98,11 @@ if sys.stdin.isatty():
 else:
     bugs = sys.stdin.read().strip('\n').strip().split()
 
-print bugs
 bugs = [i for i in bugs if i.isdigit()]    
-print bugs
-for i in bugs:
-    if run_fetch(i):
-        print time.time()
-        print 'done with %s' % (i,)
-    else:
-        pmig = phdb()
-        insert_values =  (i, 6, '', '')
-        pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
-                   insert_values)
-        pmig.close()
-        print 'failed on %s' % (i,)
+print len(bugs)
+from multiprocessing import Pool
+pool = Pool(processes=10)
+_ =  pool.map(run_fetch, bugs)
+complete = len(filter(bool, _))
+failed = len(_) - complete
+print 'completed %s, failed %s' % (complete, failed)
