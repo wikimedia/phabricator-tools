@@ -22,3 +22,8 @@ def log(msg):
             print '-> ', msg
         except:
             print 'error logging output'
+
+def save_attachment(name, data):
+    f = open(name, 'wb')
+    f.write(data)
+    f.close()

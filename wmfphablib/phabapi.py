@@ -2,6 +2,7 @@ def log(m):
     pass
 
 import base64
+import phabricator
 from phabricator import Phabricator
 
 class phabapi:
