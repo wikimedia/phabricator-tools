@@ -65,7 +65,7 @@ def main(bugid):
         uploads[a['id']] = a
 
     print uploads
-    exit()
+
     log('Attachment count: ' + str(len(uploads.keys())))
 
     pmig = phdb()
@@ -231,10 +231,16 @@ def main(bugid):
         log('-------------------------------------')
         created = epoch_to_datetime(c['creation_time'])
         comment_body = "**%s** wrote on `%s`\n\n%s" % (c['author'], created, c['text'])
-        print c
         if 'attachment' in c:
-            cattached = uploads[int(c['attachment'])]
-            comment_body += "\n\n**Attached**: {%s}" % (cattached['objectName'])
+            attached = int(c['attachment'])
+
+            #some comments match the attachment regex but the attachment was deleted
+            # by an admin from bugzilla and so is now missing.
+            if attached not in uploads:
+                comment_body += "\n\n //attachment %s missing in source//" % (attached,)
+            else:
+                cattached = uploads[int(c['attachment'])]
+                comment_body += "\n\n**Attached**: {%s}" % (cattached['objectName'])
         phab.task_comment(ticket['id'], comment_body)
 
     log(str(ticket['id']) + str(buginfo['status'])) 
