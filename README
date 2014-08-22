@@ -5,3 +5,30 @@ For the moment it is being used to house migration scripts
 and associated logic.
 
 Everything here is a work in progress.
+
+This repo makes use of the following packages:
+
+https://github.com/disqus/python-phabricator
+https://github.com/z4r/python-rtkit
+https://github.com/chasemp/python-rtkit.git
+
+Notes on DB Schema for migration:
+
+use bugzilla_migration;
+CREATE TABLE bugzilla_meta (id INT, priority INT, header TEXT(10000), comments TEXT(100000));
+
+use rt_migration;
+CREATE TABLE rt_meta (id INT, priority INT, header TEXT(10000), comments TEXT(100000));
+
+Issue examples:
+
+BZ lots of attachments:
+
+https://bugzilla.wikimedia.org/show_bug.cgi?id=22881 has 11
+https://bugzilla.wikimedia.org/show_bug.cgi?id=6068 has 14
+https://bugzilla.wikimedia.org/show_bug.cgi?id=55332 has 7, patches and html
+https://bugzilla.wikimedia.org/show_bug.cgi?id=19991 has 5
+
+BZ attachment since deleted:
+
+https://bugzilla.wikimedia.org/show_bug.cgi?id=2 has 1
