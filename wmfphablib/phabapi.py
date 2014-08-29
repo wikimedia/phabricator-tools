@@ -8,9 +8,13 @@ from phabricator import Phabricator
 class phabapi:
 
     def __init__(self, user, cert, host):
-        self.con = Phabricator(username=user,
+
+        if host:
+            self.con = Phabricator(username=user,
                                 certificate=cert,
                                 host=host)
+        else:
+            self.con = None
 
     def task_comment(self, task, msg):
         out = self.con.maniphest.update(id=task, comments=msg)
@@ -27,14 +31,14 @@ class phabapi:
                                         priority=priority,
                                         auxiliary={"std:maniphest:external_reference":"%s" % (id,),
                                                    "std:maniphest:security_topic": security})
-    def ensure_project(self, project_name):
+    def ensure_project(self, project_name, pmembers=[]):
         """make sure project exists, return phid either way"""
 
         existing_proj = self.con.project.query(names=[project_name])
         if not existing_proj['data']:
             log('need to make: ' + project_name)
             try:
-                new_proj = self.con.project.create(name=project_name, members=['PHID-USER-wa4idclisnm6aeakk7ur'])
+                new_proj = self.con.project.create(name=project_name, members=pmembers)
             #XXX: Bug where we have to specify a members array!
             except phabricator.APIError:
                 pass
