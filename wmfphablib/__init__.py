@@ -7,6 +7,13 @@ from phabdb import phdb
 from phabdb import mailinglist_phid
 from phabdb import set_project_icon
 
+#priority status meanings
+
+ipriority = {'creation_failed': 6,
+             'fetch_failed': 5,
+             'na': 0,
+             'unresolved': 1}
+
 def datetime_to_epoch(date_time):
     return str((date_time - datetime.datetime(1970,1,1)).total_seconds())
 

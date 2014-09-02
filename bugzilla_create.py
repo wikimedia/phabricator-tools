@@ -8,6 +8,8 @@ This script is a WIP for getting Bugzilla information
 with the end goal of it living in phabricator
 
 """
+import multiprocessing
+import time
 import yaml
 import ast
 import base64
@@ -26,10 +28,11 @@ from wmfphablib import log
 from wmfphablib import bzlib
 from wmfphablib import datetime_to_epoch
 from wmfphablib import epoch_to_datetime
+from wmfphablib import ipriority
 from email.parser import Parser
 import ConfigParser
 
-def main(bugid):
+def fetch(bugid):
     parser = ConfigParser.SafeConfigParser()
     parser_mode = 'phab'
     parser.read('/etc/gz_fetch.conf')
@@ -52,7 +55,6 @@ def main(bugid):
 
     #process ticket uploads to map attach id to phab file id
     uploads = {}
-    print len(attached)
     for a in attached:
         if a['is_private']:
             continue
@@ -60,15 +62,10 @@ def main(bugid):
         a['phid'] = upload['phid']
         a['name'] = upload['name']
         a['objectName'] = upload['objectName']
-        print 'aid', a['id']
-        print a['phid'], a['name'], a['objectName']
         uploads[a['id']] = a
-
-    print uploads
-
     log('Attachment count: ' + str(len(uploads.keys())))
 
-    pmig = phdb()
+    pmig = phdb(db='bugzilla_migration')
     bugid, import_priority, buginfo, com = pmig.sql_x("SELECT * FROM bugzilla_meta WHERE id = %s",
                                      (bugid,))
     pmig.close()
@@ -148,9 +145,6 @@ def main(bugid):
             c['text'] = '_hidden_'
 
         attachment = bzlib.find_attachment_in_comment(c['text'])
-        print type(attachment)
-        print 'attach', attachment
-
         if attachment:
             fmt_text = []
             text = c['text'].splitlines()
@@ -226,6 +220,8 @@ def main(bugid):
                     ccPHIDs=ccphids,
                     projects=phids)
 
+    print "Created: ", ticket['id']
+
     comment_block = "**%s** `%s` \n\n %s"
     for c in clean_com:
         log('-------------------------------------')
@@ -249,11 +245,44 @@ def main(bugid):
         phab.task_comment(ticket['id'], '//importing issue status//')
         phab.set_status(ticket['id'], buginfo['status'])
 
+    return True
+
+def run_fetch(bugid, tries=1):
+    if tries == 0:
+        pmig = phabdb.phdb(db='bugzilla_migration')
+        import_priority = pmig.sql_x("SELECT priority FROM bugzilla_meta WHERE id = %s", (bugid,))
+        if import_priority:
+            log('updating existing record')
+            pmig.sql_x("UPDATE bugzilla_meta SET priority=%s WHERE id = %s", (ipriority['creation_failed'],
+                                                                              bugid))
+        else:
+            print "%s does not seem to exist" % (bugid)
+        pmig.close()
+        print 'failed to grab %s' % (bugid,)
+        return False
+    try:
+        if fetch(bugid):
+            print time.time()
+            print 'done with %s' % (bugid,)
+            return True
+    except Exception as e:
+        import traceback
+        tries -= 1
+        time.sleep(5)
+        traceback.print_exc(file=sys.stdout)
+        print 'failed to grab %s (%s)' % (bugid, e)
+        return run_fetch(bugid, tries=tries)
+
 if sys.stdin.isatty():
     bugs = sys.argv[1:]
 else:
     bugs = sys.stdin.read().strip('\n').strip().split()
 
-for i in bugs:
-    if i.isdigit():
-        main(i)
+bugs = [i for i in bugs if i.isdigit()]
+print len(bugs)
+from multiprocessing import Pool
+pool = Pool(processes=10)
+_ =  pool.map(run_fetch, bugs)
+complete = len(filter(bool, _))
+failed = len(_) - complete
+print 'completed %s, failed %s' % (complete, failed)

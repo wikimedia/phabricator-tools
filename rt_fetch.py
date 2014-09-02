@@ -11,20 +11,18 @@ from wmfphablib import log
 from rtkit import resource
 from rtkit import authenticators
 from rtkit import errors
+from wmfphablib import ipriority
 
-#u = getpass.getpass(prompt='username? ')
-#print 'You entered:', u
-#p = getpass.getpass()
 
-parser = ConfigParser.SafeConfigParser()
-parser_mode = 'rt'
-parser.read('/etc/gz_fetch.conf')
-response = resource.RTResource(parser.get(parser_mode, 'url'),
+def fetch(tid):
+
+    parser = ConfigParser.SafeConfigParser()
+    parser_mode = 'rt'
+    parser.read('/etc/gz_fetch.conf')
+    response = resource.RTResource(parser.get(parser_mode, 'url'),
                                parser.get(parser_mode, 'username'),
                                parser.get(parser_mode, 'password'),
                                authenticators.CookieAuthenticator)
-
-def fetch(tid):
 
     tinfo = response.get(path="ticket/%s" % (tid,))
     #attachments = response.get(path="ticket/%s/attachments/" % (tid,))
@@ -78,14 +76,14 @@ def fetch(tid):
     #       ainfo_ext[k] = extract.groups()
 
     if dtinfo['Status'] == 'resolved':
-        creation_priority = 0
+        creation_priority = ipriority['na']
     else:
-        creation_priority = 1
+        creation_priority = ipriority['unresolved']
 
     print 'info', dtinfo
     com = json.dumps(comments)
     tinfo = json.dumps(dtinfo)
-    pmig = phdb()
+    pmig = phdb(db='rt_migration')
     insert_values =  (tid, creation_priority, tinfo, com)
     pmig.sql_x("INSERT INTO rt_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
                insert_values)
@@ -94,9 +92,9 @@ def fetch(tid):
 
 def run_fetch(tid, tries=1):
     if tries == 0:
-        pmig = phdb()
-        insert_values =  (tid, 6, '', '')
-        pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
+        pmig = phdb(db='rt_migration')
+        insert_values =  (tid, ipriority['fetch_failed'], '', '')
+        pmig.sql_x("INSERT INTO rt_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
                    insert_values)
         pmig.close()
         print 'failed to grab %s' % (tid,)

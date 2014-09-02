@@ -18,10 +18,8 @@ from wmfphablib import log
 from wmfphablib import bzlib
 from wmfphablib import epoch_to_datetime
 from wmfphablib import datetime_to_epoch
-from phabdb import phdb
-#from phabdb import mailinglist_phid
-#from phabdb import set_project_icon
-#from email.parser import Parser
+from wmfphablib import phabdb
+from wmfphablib import ipriority
 import ConfigParser
 
 def fetch(bugid):
@@ -55,21 +53,32 @@ def fetch(bugid):
     status = bzlib.status_convert(buginfo['status'])
 
     if status != 'open':
-        creation_priority = 0
+        creation_priority = ipriority['na']
     else:
-        creation_priority = 1
+        creation_priority = ipriority['unresolved']
 
-    pmig = phdb()
-    insert_values =  (bugid, creation_priority, json.dumps(buginfo), json.dumps(com))
-    pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
+    pmig = phabdb.phdb(db='bugzilla_migration')
+    current = pmig.sql_x("SELECT * from bugzilla_meta where id = %s", bugid)
+    if current:
+        log('updating current record')
+        update_values = (creation_priority,
+                         json.dumps(buginfo),
+                         json.dumps(com),
+                         bugid)
+        pmig.sql_x("UPDATE bugzilla_meta SET priority=%s, header=%s, comments=%s WHERE id = %s",
+                   update_values)
+    else:
+        log('inserting new record')
+        insert_values =  (bugid, creation_priority, json.dumps(buginfo), json.dumps(com))
+        pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
                insert_values)
     pmig.close()
     return True
 
 def run_fetch(bugid, tries=1):
     if tries == 0:
-        pmig = phdb()
-        insert_values =  (bugid, 6, '', '')
+        pmig = phabdb.phdb()
+        insert_values =  (bugid, ipriority['fetch_failed'], '', '')
         pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
                    insert_values)
         pmig.close()
