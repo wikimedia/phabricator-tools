@@ -30,12 +30,15 @@ from wmfphablib import datetime_to_epoch
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
 from email.parser import Parser
+from wmfphablib import get_config_file
 import ConfigParser
+
+configfile = get_config_file()
 
 def fetch(bugid):
     parser = ConfigParser.SafeConfigParser()
     parser_mode = 'phab'
-    parser.read('/etc/gz_fetch.conf')
+    parser.read(configfile)
     phab = Phab(user=parser.get(parser_mode, 'username'),
                 cert=parser.get(parser_mode, 'certificate'),
                 host=parser.get(parser_mode, 'host'))
@@ -66,7 +69,7 @@ def fetch(bugid):
     log('Attachment count: ' + str(len(uploads.keys())))
 
     pmig = phdb(db='bugzilla_migration')
-    bugid, import_priority, buginfo, com = pmig.sql_x("SELECT * FROM bugzilla_meta WHERE id = %s",
+    bugid, import_priority, buginfo, com, created, modified = pmig.sql_x("SELECT * FROM bugzilla_meta WHERE id = %s",
                                      (bugid,))
     pmig.close()
 
@@ -218,7 +221,8 @@ def fetch(bugid):
                     buginfo['priority'],
                     buginfo["secstate"],
                     ccPHIDs=ccphids,
-                    projects=phids)
+                    projects=phids,
+                    refcode=bzlib.prepend)
 
     print "Created: ", ticket['id']
 

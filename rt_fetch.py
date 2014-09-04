@@ -12,13 +12,18 @@ from rtkit import resource
 from rtkit import authenticators
 from rtkit import errors
 from wmfphablib import ipriority
+from wmfphablib import get_config_file
+from wmfphablib import now
+import ConfigParser
+
+configfile = get_config_file()
 
 
 def fetch(tid):
 
     parser = ConfigParser.SafeConfigParser()
     parser_mode = 'rt'
-    parser.read('/etc/gz_fetch.conf')
+    parser.read(configfile)
     response = resource.RTResource(parser.get(parser_mode, 'url'),
                                parser.get(parser_mode, 'username'),
                                parser.get(parser_mode, 'password'),
@@ -84,8 +89,8 @@ def fetch(tid):
     com = json.dumps(comments)
     tinfo = json.dumps(dtinfo)
     pmig = phdb(db='rt_migration')
-    insert_values =  (tid, creation_priority, tinfo, com)
-    pmig.sql_x("INSERT INTO rt_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
+    insert_values =  (tid, creation_priority, tinfo, com, now(), now())
+    pmig.sql_x("INSERT INTO rt_meta (id, priority, header, comments, created, modified) VALUES (%s, %s, %s, %s, %s, %s)",
                insert_values)
     pmig.close()
     return True
@@ -93,8 +98,8 @@ def fetch(tid):
 def run_fetch(tid, tries=1):
     if tries == 0:
         pmig = phdb(db='rt_migration')
-        insert_values =  (tid, ipriority['fetch_failed'], '', '')
-        pmig.sql_x("INSERT INTO rt_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
+        insert_values =  (tid, ipriority['fetch_failed'], '', '', now(), now())
+        pmig.sql_x("INSERT INTO rt_meta (id, priority, header, comments, created, modified) VALUES (%s, %s, %s, %s, %s, %s)",
                    insert_values)
         pmig.close()
         print 'failed to grab %s' % (tid,)

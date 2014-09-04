@@ -4,10 +4,12 @@ sys.path.append('/'.join(path.split('/')[:-1]))
 from wmfphablib import phabdb
 
 #print phabdb.phid_by_custom_field('fl562')
-#print 'email', phabdb.email_by_userphid('PHID-USER-egea763uwv723xifsfya')
+print 'email', phabdb.email_by_userphid('PHID-USER-nnipdbdictreyx7qhaii')
+exit()
 
 #get the comment transactions by task
 coms =  phabdb.comment_transactions_by_task_phid('PHID-TASK-3eivod3do2vzdviblbfr')
+
 final_comments = {}
 for i, c in enumerate(coms):
     comdetail = {}

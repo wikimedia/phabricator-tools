@@ -13,18 +13,22 @@ from wmfphablib import set_project_icon
 from wmfphablib import phabdb
 from wmfphablib import Phab
 from wmfphablib import log
-from wmfphablib import bzlib
+from wmfphablib import rtlib
 from wmfphablib import datetime_to_epoch
 from wmfphablib import epoch_to_datetime
+from wmfphablib import now
 from rtkit import resource
 from rtkit import authenticators
 from rtkit import errors
 from wmfphablib import ipriority
+from wmfphablib import get_config_file
+
+configfile = get_config_file()
 
 
 def create(rtid):
     parser = ConfigParser.SafeConfigParser()
-    parser.read('/etc/gz_fetch.conf')
+    parser.read(configfile)
 
     parser_mode = 'phab'
     phab = Phab(user=parser.get(parser_mode, 'username'),
@@ -51,8 +55,8 @@ def create(rtid):
     history = response.get(path="ticket/%s/history?format=l" % (rtid,))
 
     pmig = phdb(db='rt_migration')
-    rrtid, import_priority, rtinfo, com = pmig.sql_x("SELECT * FROM rt_meta WHERE id = %s",
-                                     (rtid,))
+    rrtid, import_priority, rtinfo, com, created, modified = pmig.sql_x("SELECT * FROM rt_meta WHERE id = %s",
+                                                                        (rtid,))
     pmig.close()
     rtinfo = json.loads(rtinfo)
     comments = json.loads(com)
@@ -284,6 +288,7 @@ def create(rtid):
         phab.set_status(ticket['id'], status)
 
     print ticket['id']
+    return True
 
 
 def run_create(rtid, tries=1):
@@ -292,8 +297,9 @@ def run_create(rtid, tries=1):
         import_priority = pmig.sql_x("SELECT priority FROM rt_meta WHERE id = %s", (rtid,))
         if import_priority:
             log('updating existing record')
-            pmig.sql_x("UPDATE rt_meta SET priority=%s WHERE id = %s", (ipriority['creation_failed'],
-                                                                        rtid))
+            pmig.sql_x("UPDATE rt_meta SET priority=%s modified=%s WHERE id = %s", (ipriority['creation_failed'],
+                                                                                    now(),
+                                                                                    rtid))
         else:
             print "%s does not seem to exist" % (rtid)
         pmig.close()

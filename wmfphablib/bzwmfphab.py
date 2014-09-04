@@ -1,5 +1,7 @@
 import re
 
+prepend = 'bz'
+
 def find_attachment_in_comment(text):
     a = re.search('Created\sattachment\s(\d+)', text)
     if a:

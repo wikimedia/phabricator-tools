@@ -20,13 +20,17 @@ from wmfphablib import epoch_to_datetime
 from wmfphablib import datetime_to_epoch
 from wmfphablib import phabdb
 from wmfphablib import ipriority
+from wmfphablib import get_config_file
+from wmfphablib import now
 import ConfigParser
+
+configfile = get_config_file()
 
 def fetch(bugid):
 
     parser = ConfigParser.SafeConfigParser()
     parser_mode = 'bz'
-    parser.read('/etc/gz_fetch.conf')
+    parser.read(configfile)
     server = xmlrpclib.ServerProxy(parser.get(parser_mode, 'url'), use_datetime=True)
 
     token_data = server.User.login({'login': parser.get(parser_mode, 'Bugzilla_login'),
@@ -64,22 +68,24 @@ def fetch(bugid):
         update_values = (creation_priority,
                          json.dumps(buginfo),
                          json.dumps(com),
+                         now(),
                          bugid)
-        pmig.sql_x("UPDATE bugzilla_meta SET priority=%s, header=%s, comments=%s WHERE id = %s",
+        pmig.sql_x("UPDATE bugzilla_meta SET priority=%s, header=%s, comments=%s modified=%s WHERE id = %s",
                    update_values)
     else:
         log('inserting new record')
-        insert_values =  (bugid, creation_priority, json.dumps(buginfo), json.dumps(com))
-        pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
-               insert_values)
+        insert_values =  (bugid, creation_priority, json.dumps(buginfo), json.dumps(com), now(), now())
+        sql = "INSERT INTO bugzilla_meta (id, priority, header, comments, created, modified) VALUES (%s, %s, %s, %s, %s, %s)"
+        pmig.sql_x(sql,
+                   insert_values)
     pmig.close()
     return True
 
 def run_fetch(bugid, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb()
-        insert_values =  (bugid, ipriority['fetch_failed'], '', '')
-        pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
+        pmig = phabdb.phdb(db='bugzilla_migration')
+        insert_values =  (bugid, ipriority['fetch_failed'], '', '', now(), now())
+        pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments, modified, created) VALUES (%s, %s, %s, %s, %s, %s)",
                    insert_values)
         pmig.close()
         print 'failed to grab %s' % (bugid,)

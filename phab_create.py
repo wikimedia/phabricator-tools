@@ -9,21 +9,31 @@ from wmfphablib import phabdb
 from wmfphablib import log
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
+from wmfphablib import get_config_file
+from wmfphablib import now
+import ConfigParser
+
+configfile = get_config_file()
 
 
 def fetch(PHABTICKETID):
 
     PHABTICKETID = int(PHABTICKETID)
-    phab = Phabricator(username='Rush',
-                   certificate="7xboqo5pc6ubg6s37raf5fvmw4ltwg2eu4brh23k5fskgegkcbojix44r2rtt6eter3sktkly3vqspmfjy2n6kjzsis63od2ns7ayek3xby5xlyydczc3rhrtdb3xugkgfg3dxrbvnxjw3jnzmdm6cf3mpmca3hsfrf7aujbufimh3lk4u6uz4nefukarwsefkbccjfgn7gmuxeueouh4ldehvwdcvakbxmrmdri3stgw5sfvukib4yngf23etp",
-                   host = "http://fabapitest.wmflabs.org/api/")
+
+    parser = ConfigParser.SafeConfigParser()
+    parser_mode = 'phab'
+    parser.read(configfile)
+    phab = Phabricator(parser.get(parser_mode, 'username'),
+                       parser.get(parser_mode, 'certificate'),
+                       parser.get(parser_mode, 'host'))
+
     log(str(phab.user.whoami()))
     #dummy instance of phabapi
     phabm = phabmacros('', '', '')
     phabm.con = phab
 
     pmig = phabdb.phdb(db='fab_migration')
-    tid, import_priority, header, com = pmig.sql_x("SELECT * FROM fab_meta WHERE id = %s", PHABTICKETID)
+    tid, import_priority, header, com, created, modified = pmig.sql_x("SELECT * FROM fab_meta WHERE id = %s", PHABTICKETID)
     pmig.close()
 
     log('priority: %d' % (import_priority,))
@@ -53,7 +63,8 @@ def fetch(PHABTICKETID):
     print 'Created', newticket['id']
 
     #0 {'text': 'comtask_com1', 'last_edit': 1409324924L, 'user': u'foo@wikimedia.org', 'created': 1409324924L}
-    for k, v in comments.iteritems():
+    ocomments =  collections.OrderedDict(sorted(comments.items()))
+    for k, v in ocomments.iteritems():
         created = epoch_to_datetime(v['created'])
         user = v['user'].split('@')[0]
         comment_body = "**%s** wrote on `%s`\n\n%s" % (user, created, v['text'])
@@ -67,8 +78,9 @@ def run_fetch(fabid, tries=1):
 
         if import_priority:
             log('updating existing record')
-            pmig.sql_x("UPDATE fab_meta SET priority=%s WHERE id = %s", (ipriority['creation_failed'],
-                                                                         fabid))
+            pmig.sql_x("UPDATE fab_meta SET priority=%s, modified=%s WHERE id = %s", (ipriority['creation_failed'],
+                                                                                     now(),
+                                                                                     fabid))
         else:
             print "%s does not seem to exist" % (fabid)
         pmig.close()

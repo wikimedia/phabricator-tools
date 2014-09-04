@@ -24,13 +24,19 @@ class phabapi:
         out = self.con.maniphest.update(id=task, status=status)
         return out
 
-    def task_create(self, title, desc, id, priority, security, ccPHIDs=[], projects=[]):
+    def task_create(self, title, desc, id, priority, security, ccPHIDs=[], projects=[], refcode=''):
+        if refcode:
+            reference = '%s%s' % (refcode, id)
+        else:
+            reference = id
+
         return self.con.maniphest.createtask(title=title,
                                         description="%s" % desc,
                                         projectPHIDs=projects,
                                         priority=priority,
-                                        auxiliary={"std:maniphest:external_reference":"%s" % (id,),
+                                        auxiliary={"std:maniphest:external_reference":"%s" % (reference,),
                                                    "std:maniphest:security_topic": security})
+
     def ensure_project(self, project_name, pmembers=[]):
         """make sure project exists, return phid either way"""
 

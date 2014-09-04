@@ -9,7 +9,11 @@ from wmfphablib import phabdb
 from wmfphablib import log
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
+from wmfphablib import get_config_file
+from wmfphablib import now
+import ConfigParser
 
+configfile = get_config_file()
 
 def comments_by_task(taskphid):
     #get the comment transactions by task
@@ -19,6 +23,7 @@ def comments_by_task(taskphid):
         return {}
     for i, c in enumerate(coms):
         comdetail = {}
+        log('looking for email by user phid: %s' % (c[2],))
         comdetail['user'] = phabdb.email_by_userphid(c[2])
         #for a comment transaction get all records (edits, etc)
         content = phabdb.comment_by_transaction(c[1])
@@ -48,17 +53,20 @@ def comments_by_task(taskphid):
 def fetch(PHABTICKETID):
 
     PHABTICKETID = int(PHABTICKETID)
-    phab = Phabricator(username='Rush',
-                   certificate="7xboqo5pc6ubg6s37raf5fvmw4ltwg2eu4brh23k5fskgegkcbojix44r2rtt6eter3sktkly3vqspmfjy2n6kjzsis63od2ns7ayek3xby5xlyydczc3rhrtdb3xugkgfg3dxrbvnxjw3jnzmdm6cf3mpmca3hsfrf7aujbufimh3lk4u6uz4nefukarwsefkbccjfgn7gmuxeueouh4ldehvwdcvakbxmrmdri3stgw5sfvukib4yngf23etp",
-                   host = "http://fabapitest.wmflabs.org/api/")
-    log(str(phab.user.whoami()))
 
-    #mock new phab for future
-    newphab = phab
+    parser = ConfigParser.SafeConfigParser()
+    parser_mode = 'oldfab'
+    parser.read(configfile)
+    oldfab = Phabricator(parser.get(parser_mode, 'user'),
+                         parser.get(parser_mode, 'cert'),
+                         parser.get(parser_mode, 'host'))
+
+    log(str(oldfab.user.whoami()))
+
     #dummy instance of phabapi
     phabm = phabmacros('', '', '')
     #assign newphab instance as self.con for dummyphab
-    phabm.con = newphab
+    phabm.con = oldfab
 
     """
     <Result: {u'authorPHID': u'PHID-USER-qbtllnzb6pwl3ttzqa3m',
@@ -82,10 +90,12 @@ def fetch(PHABTICKETID):
                  u'priority': u'High'}>
     """
 
-    tinfo = phab.maniphest.info(task_id=PHABTICKETID).response
+    tinfo = oldfab.maniphest.info(task_id=PHABTICKETID).response
+    log(tinfo)
+
     comments = comments_by_task(tinfo['phid'])
     ordered_comments =  collections.OrderedDict(sorted(comments.items()))
-    log(tinfo)
+    log(str(ordered_comments))
 
     """
     <Result: {u'userName': u'bd808',
@@ -96,14 +106,14 @@ def fetch(PHABTICKETID):
                    u'uri': u'http://fab.wmflabs.org/p/bd808/'}>
     """
 
-    authorInfo = phab.user.info(phid=tinfo['authorPHID'])
-    tinfo['xauthor']  = phabdb.email_by_userphid(authorInfo['phid'])
+    authorInfo = oldfab.user.info(phid=tinfo['authorPHID'])
+    tinfo['xauthor'] = phabdb.email_by_userphid(authorInfo['phid'])
     log('author: ' + tinfo['xauthor'])
 
     ccs = []
     if tinfo['ccPHIDs']:
         for c in tinfo['ccPHIDs']:
-            ccInfo = phab.user.info(phid=c)
+            ccInfo = oldfab.user.info(phid=c)
             ccs.append(phabdb.email_by_userphid(ccInfo['phid']))
     tinfo['xccs'] = ccs
     log('ccs: ' + str(ccs))
@@ -113,10 +123,10 @@ def fetch(PHABTICKETID):
       {u'PHID-PROJ-5ncvaivs3upngr7ijqy2':
         {u'phid': u'PHID-PROJ-5ncvaivs3upngr7ijqy2',
          u'name': u'logstash',
-  u'dateCreated': u'1391641549',
+    u'dateCreated': u'1391641549',
       u'members': [u'PHID-USER-65zhggegfvhojb4nynay'],
            u'id': u'3',
- u'dateModified': u'1398282408',
+    u'dateModified': u'1398282408',
         u'slugs': [u'logstash']}}, u'slugMap': []}>
     """
 
@@ -126,7 +136,7 @@ def fetch(PHABTICKETID):
     print 'associated', tinfo['projectPHIDs']
     #if we try to query for an empty list we get back ALLLLLL
     if associated_projects:
-        pinfo = phab.project.query(phids=associated_projects)
+        pinfo = oldfab.project.query(phids=associated_projects)
         for p in pinfo['data'].values():
             project_names.append(p['name'])
     log('project names: ' + str(project_names))
@@ -147,22 +157,29 @@ def fetch(PHABTICKETID):
         update_values = (ipriority['fetch_failed'],
                          json.dumps(tinfo),
                          json.dumps(comments),
+                         now(),
                          PHABTICKETID)
-        pmig.sql_x("UPDATE fab_meta SET priority=%s, header=%s, comments=%s WHERE id = %s",
-               update_values)
+        pmig.sql_x("UPDATE fab_meta SET priority=%s, header=%s, comments=%s, modified=%s WHERE id = %s",
+                    update_values)
     else:
         log('inserting new record')
-        insert_values =  (PHABTICKETID, creation_priority, json.dumps(tinfo), json.dumps(comments))
-        pmig.sql_x("INSERT INTO fab_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
-               insert_values)
+        insert_values =  (PHABTICKETID,
+                          creation_priority,
+                          json.dumps(tinfo),
+                          json.dumps(comments),
+                          now(),
+                          now())
+
+        pmig.sql_x("INSERT INTO fab_meta (id, priority, header, comments, created, modified) VALUES (%s, %s, %s, %s, %s, %s)",
+                   insert_values)
     pmig.close()
     return True
 
 def run_fetch(fabid, tries=1):
     if tries == 0:
         pmig = phabdb.phdb(db='fab_migration')
-        insert_values =  (fabid, ipriority['fetch_failed'], 'nan', 'nan')
-        pmig.sql_x("INSERT INTO fab_meta (id, priority, header, comments) VALUES (%s, %s, %s, %s)",
+        insert_values =  (fabid, ipriority['fetch_failed'], 'nan', 'nan', now(), now())
+        pmig.sql_x("INSERT INTO fab_meta (id, priority, header, comments, created, modified) VALUES (%s, %s, %s, %s, %s, %s)",
                    insert_values)
         pmig.close()
         print 'failed to grab %s' % (fabid,)
@@ -175,6 +192,8 @@ def run_fetch(fabid, tries=1):
     except Exception as e:
         tries -= 1
         time.sleep(5)
+        import traceback
+        traceback.print_exc(file=sys.stdout)
         print 'failed to grab %s (%s)' % (fabid, e)
         return run_fetch(fabid, tries=tries)
 
