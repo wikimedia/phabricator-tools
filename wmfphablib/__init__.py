@@ -4,6 +4,7 @@ import syslog
 import datetime
 import bzwmfphab as bzlib
 import rtlib
+import fablib
 from phabapi import phabapi as Phab
 from phabdb import phdb
 from phabdb import mailinglist_phid

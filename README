@@ -36,7 +36,10 @@ CREATE TABLE rt_meta (
                              modified int(12) NOT NULL
                             );
 
+------------------------------------------------
+
 use fab_migration;
+
 CREATE TABLE fab_meta (
                              id INT,
                              priority INT,
@@ -45,6 +48,16 @@ CREATE TABLE fab_meta (
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
                             );
+CREATE TABLE user_relations
+(
+                            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                             user TEXT(1000),
+                             assigned TEXT(10000),
+                             cc TEXT(10000),
+                             author TEXT(10000),
+                             created int(12) NOT NULL,
+                             modified int(12) NOT NULL
+);
 
 Issue examples:
 

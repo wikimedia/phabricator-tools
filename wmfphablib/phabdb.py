@@ -26,7 +26,6 @@ def email_by_userphid(userphid):
     """
     p = phdb(db="phabricator_user")
     phid = p.sql_x("SELECT * from user_email where userPHID = %s", (userphid))
-    print phid
     #print phid
     if phid:
         email = phid[2]
