@@ -4,6 +4,7 @@ def log(m):
 import base64
 import phabricator
 from phabricator import Phabricator
+import phabdb
 
 class phabapi:
 
@@ -15,6 +16,15 @@ class phabapi:
                                 host=host)
         else:
             self.con = None
+
+    def synced_authored(self, phid, id):
+        refs = phabdb.reference_ticket('fl%s' % (id,))
+        if not refs:
+            log('reference ticket not found for %s' % ('fl%s' % (id,),))
+            return
+        log('reference ticket found for %s' % ('fl%s' % (id,),))
+        newid = self.ticket_id_by_phid(refs[0])
+        phabdb.set_task_author(phid, newid)
 
     def task_comment(self, task, msg):
         out = self.con.maniphest.update(id=task, comments=msg)
@@ -60,3 +70,11 @@ class phabapi:
         encoded = base64.b64encode(data)
         upload = self.con.file.upload(name=name, data_base64=encoded)
         return self.con.file.info(phid=upload.response).response
+
+    def ticket_id_by_phid(self, phid):
+         tinfo = self.con.maniphest.query(phids=[phid])
+         if not tinfo:
+             return ''
+         if not tinfo.keys():
+             return ''
+         return tinfo[tinfo.keys()[0]]['id']

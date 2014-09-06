@@ -163,8 +163,11 @@ def fetch(PHABTICKETID):
     else:
         creation_priority = ipriority['unresolved']
 
-    pmig = phabdb.phdb(db='fab_migration')
 
+    blocked_tasks = phabdb.get_tasks_blocked('PHID-TASK-llxzmfbbcc4adujigg4w')
+    tinfo['blocked_tasks'] = blocked_tasks
+
+    pmig = phabdb.phdb(db='fab_migration')
     current = pmig.sql_x("SELECT * from fab_meta where id = %s", PHABTICKETID)
     if current:
         log('updating current record')
@@ -191,12 +194,11 @@ def fetch(PHABTICKETID):
 
 def run_fetch(fabid, tries=1):
     if tries == 0:
-        print 'faiiiiiiiiiiil'
         pmig = phabdb.phdb(db='fab_migration')
-        import_priority = pmig.sql_x("SELECT priority FROM rt_meta WHERE id = %s", (fabid,))
+        import_priority = pmig.sql_x("SELECT priority FROM fab_meta WHERE id = %s", (fabid,))
         if import_priority:
             log('updating existing record')
-            pmig.sql_x("UPDATE rt_meta SET priority=%s modified=%s WHERE id = %s", (ipriority['fetch_failed'],
+            pmig.sql_x("UPDATE fab_meta SET priority=%s modified=%s WHERE id = %s", (ipriority['fetch_failed'],
                                                                                     now(),
                                                                                     fabid))
         else:

@@ -3,6 +3,72 @@ import sys
 import MySQLdb
 import traceback
 import syslog
+import time
+
+def set_tasks_blocked(blocker, blocked):
+    """sets two tasks in dependent state
+    :param blocker: blocking tasks phid
+    :param blocked: blocked tasks phid
+    """    
+    blocked_already = get_tasks_blocked(blocker)
+    print type(blocked), 'in', type(blocked_already)
+    print blocked, 'in', blocked_already
+    if blocked in blocked_already:
+        print '-----------already blocked'
+        return
+    p = phdb(db='phabricator_maniphest')
+    insert_values = (blocker, 4, blocked, int(time.time()), 0)
+    p.sql_x("INSERT INTO edge (src, type, dst, dateCreated, seq) VALUES (%s, %s, %s, %s, %s)",
+            insert_values)
+
+    insert_values = (blocked, 3, blocker, int(time.time()), 0)
+    p.sql_x("INSERT INTO edge (src, type, dst, dateCreated, seq) VALUES (%s, %s, %s, %s, %s)",
+            insert_values)
+    p.close()
+    return get_tasks_blocked(blocker)
+
+def get_tasks_blocked(taskphid):
+    #tasks I'm blocking
+    fabdb = phdb(db='phabricator_maniphest')
+    _ = fabdb.sql_x("SELECT dst FROM edge WHERE type = 4 AND src=%s",  (taskphid,), limit=None)
+    if not _:
+        return []
+    return [b[0] for b in _]
+
+def get_blocking_tasks(taskphid):
+    #tasks I'm blocking
+    fabdb = phdb(db='phabricator_maniphest')
+    _ = fabdb.sql_x("SELECT dst FROM edge WHERE type = 3 and dst=%s",  (taskphid,), limit=None)
+    if not _:
+        return ''
+    return _
+
+def get_user_relations():
+    fabdb = phabdb.phdb(db='fab_migration')
+    hq = "SELECT assigned, cc, author, created, modified FROM user_relations WHERE user = %s"
+    _ = fabdb.sql_x(hq, (v[1],))
+    fabdb.close()
+    if not _:
+        return ''
+    return _
+
+
+def get_verified_emails(modtime=0):
+    pmig = phdb(db='phabricator_user')
+    sql = "SELECT userPHID, address from user_email where dateModified >= %s and isVerified = 1"
+    info = pmig.sql_x(sql, (1), limit=None)
+    pmig.close()
+    if not info:
+        return ''
+    return info
+
+def reference_ticket(reference):
+    rdb = phdb(db='phabricator_maniphest')
+    tr = rdb.sql_x("SELECT objectPHID FROM maniphest_customfieldstringindex WHERE indexValue = %s", reference)
+    rdb.close()
+    if not tr:
+        return ''
+    return tr
 
 def email_by_userphid(userphid):
     """
@@ -86,9 +152,16 @@ def set_project_icon(project, icon='briefcase', color='blue'):
     """
 
     p = phdb(db='phabricator_project')
-    _ = p.sql_x("UPDATE project SET icon=%s, color=%s  WHERE name=%s", ('fa-' + icon, color, project))
+    _ = p.sql_x("UPDATE project SET icon=%s, color=%s WHERE name=%s", ('fa-' + icon, color, project))
     p.close()
     return _
+
+def set_task_author(authorphid, id):
+    p = phdb(db='phabricator_maniphest')
+    _ = p.sql_x("UPDATE maniphest_task SET authorPHID=%s WHERE id=%s", (authorphid, id))
+    p.close()
+    return _
+
 
 class phdb:
     def __init__(self, host= "localhost",

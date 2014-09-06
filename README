@@ -48,9 +48,10 @@ CREATE TABLE fab_meta (
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
                             );
+
 CREATE TABLE user_relations
 (
-                            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                             id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                              user TEXT(1000),
                              assigned TEXT(10000),
                              cc TEXT(10000),
@@ -58,6 +59,10 @@ CREATE TABLE user_relations
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
 );
+
+create table task_relations (id INT, blocks TEXT(1000), modified INT(12));
+
+---------------------------------
 
 Issue examples:
 

@@ -2,10 +2,14 @@ import os, sys
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('/'.join(path.split('/')[:-1]))
 from wmfphablib import phabdb
+print phabdb.get_tasks_blocked('PHID-TASK-llxzmfbbcc4adujigg4w')
+print phabdb.get_tasks_blocked('PHID-TASK-cjibddnd5lsa5n5hdsyx')
+exit()
+print phabdb.set_tasks_blocked('PHID-TASK-llxzmfbbcc4adujigg4w', 'PHID-TASK-cjibddnd5lsa5n5hdsyx')
 
+#print phabdb.get_blocking_tasks('PHID-TASK-llxzmfbbcc4adujigg4w')
 #print phabdb.phid_by_custom_field('fl562')
 print 'email', phabdb.email_by_userphid('PHID-USER-nnipdbdictreyx7qhaii')
-exit()
 
 #get the comment transactions by task
 coms =  phabdb.comment_transactions_by_task_phid('PHID-TASK-3eivod3do2vzdviblbfr')
