@@ -2,8 +2,10 @@ import os, sys
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('/'.join(path.split('/')[:-1]))
 from wmfphablib import phabdb
-print phabdb.get_tasks_blocked('PHID-TASK-llxzmfbbcc4adujigg4w')
-print phabdb.get_tasks_blocked('PHID-TASK-cjibddnd5lsa5n5hdsyx')
+
+email_tuples =  phabdb.get_verified_emails()
+flat_list =  [e[1] for e in email_tuples]
+print ','.join(flat_list)
 exit()
 print phabdb.set_tasks_blocked('PHID-TASK-llxzmfbbcc4adujigg4w', 'PHID-TASK-cjibddnd5lsa5n5hdsyx')
 

@@ -1,4 +1,5 @@
 saved = ['Analytics-EEVS',
+         'Wikimedia Phabricator Production Instance',
          'Architecture',
          'bugzilla-migration',
          'Chemical_Markup_for_Wikimedia_Commons',

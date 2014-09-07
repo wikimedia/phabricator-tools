@@ -5,6 +5,15 @@ import traceback
 import syslog
 import time
 
+def get_emails(modtime=0):
+    pmig = phdb(db='phabricator_user')
+    sql = "SELECT address from user_email"
+    info = pmig.sql_x(sql, (), limit=None)
+    pmig.close()
+    if not info:
+        return ''
+    return info
+
 def set_tasks_blocked(blocker, blocked):
     """sets two tasks in dependent state
     :param blocker: blocking tasks phid
@@ -14,7 +23,6 @@ def set_tasks_blocked(blocker, blocked):
     print type(blocked), 'in', type(blocked_already)
     print blocked, 'in', blocked_already
     if blocked in blocked_already:
-        print '-----------already blocked'
         return
     p = phdb(db='phabricator_maniphest')
     insert_values = (blocker, 4, blocked, int(time.time()), 0)
