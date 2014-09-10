@@ -38,7 +38,7 @@ CREATE TABLE rt_meta (
 
 ------------------------------------------------
 
-use fab_migration;
+CREATE DATABASE fab_migration;
 
 CREATE TABLE fab_meta (
                              id INT,
@@ -52,6 +52,7 @@ CREATE TABLE fab_meta (
 CREATE TABLE user_relations
 (
                              id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                             priority INT,
                              user TEXT(1000),
                              assigned TEXT(10000),
                              cc TEXT(10000),
@@ -60,7 +61,7 @@ CREATE TABLE user_relations
                              modified int(12) NOT NULL
 );
 
-create table task_relations (id INT, blocks TEXT(1000), modified INT(12));
+create table task_relations (id INT, priority INT, blocks TEXT(1000), modified INT(12));
 
 ---------------------------------
 

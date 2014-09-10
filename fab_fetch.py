@@ -7,11 +7,13 @@ from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import phabdb
 from wmfphablib import log
+from wmfphablib import vlog
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
 from wmfphablib import get_config_file
 from wmfphablib import now
 from wmfphablib import fablib
+from wmfphablib import return_bug_list
 import ConfigParser
 
 configfile = get_config_file()
@@ -24,7 +26,7 @@ def comments_by_task(taskphid):
         return {}
     for i, c in enumerate(coms):
         comdetail = {}
-        log('looking for email by user phid: %s' % (c[2],))
+        vlog('looking for email by user phid: %s' % (c[2],))
         comdetail['xuserphid'] = c[2]
         comdetail['xuseremail'] = phabdb.email_by_userphid(c[2])
         #for a comment transaction get all records (edits, etc)
@@ -63,8 +65,6 @@ def fetch(PHABTICKETID):
                          parser.get(parser_mode, 'cert'),
                          parser.get(parser_mode, 'host'))
 
-    log(str(oldfab.user.whoami()))
-
     #dummy instance of phabapi
     phabm = phabmacros('', '', '')
     #assign newphab instance as self.con for dummyphab
@@ -93,13 +93,15 @@ def fetch(PHABTICKETID):
     """
 
     tinfo = oldfab.maniphest.info(task_id=PHABTICKETID).response
-    log(tinfo)
+    vlog(tinfo)
+    if 'objectName' in tinfo:
+        log("Fetching %s" % (tinfo['objectName']))
 
     comments = comments_by_task(tinfo['phid'])
     for i, c in comments.iteritems():
         comments[i]['xcommenter'] = dict(oldfab.user.info(phid=c['xuserphid']))
     ordered_comments =  collections.OrderedDict(sorted(comments.items()))
-    log(str(ordered_comments))
+    vlog(str(ordered_comments))
 
     """
     <Result: {u'userName': u'bd808',
@@ -112,7 +114,8 @@ def fetch(PHABTICKETID):
 
     authorInfo = oldfab.user.info(phid=tinfo['authorPHID'])
     tinfo['xauthor'] = phabdb.email_by_userphid(authorInfo['phid'])
-    log('author: ' + tinfo['xauthor'])
+    lauthor = tinfo['xauthor'] or 'no author'
+    vlog('author: ' + lauthor)
 
     ccs = []
     if tinfo['ccPHIDs']:
@@ -120,7 +123,7 @@ def fetch(PHABTICKETID):
             ccInfo = oldfab.user.info(phid=c)
             ccs.append(phabdb.email_by_userphid(ccInfo['phid']))
     tinfo['xccs'] = ccs
-    log('ccs: ' + str(ccs))
+    vlog('ccs: ' + str(ccs))
 
     if tinfo['ownerPHID']:
         tinfo['xowner'] = phabdb.email_by_userphid(tinfo['ownerPHID'])
@@ -142,19 +145,24 @@ def fetch(PHABTICKETID):
     project_names = []
     associated_projects = tinfo['projectPHIDs']
 
-    log('associated projects: %s' % (str(tinfo['projectPHIDs'])))
+    vlog('associated projects: %s' % (str(tinfo['projectPHIDs'])))
     #if we try to query for an empty list we get back ALLLLLL
     if associated_projects:
         pinfo = oldfab.project.query(phids=associated_projects)
-        for p in pinfo['data'].values():
-            project_names.append(p['name'])
+        if pinfo['data']:
+            for p in pinfo['data'].values():
+                project_names.append(p['name'])
 
-    saved_projects = [p in fablib.saved for p in project_names]
+    def norm(pname):
+        return pname.lower().replace(' ', '_').replace('-', '_')
+
+    norm_projects = [norm(p) for p in fablib.saved]
+    saved_projects = [norm(p) in norm_projects for p in project_names]
     if not any(saved_projects):
         print "Skipping %s as it's not in a saved project" % (PHABTICKETID)
-        return
+        return True
 
-    log('project names: ' + str(project_names))
+    vlog('project names: ' + str(project_names))
     tinfo['xprojects'] = project_names
 
     status = tinfo['status']
@@ -164,13 +172,22 @@ def fetch(PHABTICKETID):
         creation_priority = ipriority['unresolved']
 
 
-    blocked_tasks = phabdb.get_tasks_blocked('PHID-TASK-llxzmfbbcc4adujigg4w')
-    tinfo['blocked_tasks'] = blocked_tasks
+    blocked_tasks = phabdb.get_tasks_blocked(tinfo['phid'])
+    if blocked_tasks:
+        blocked = []
+        block_details = oldfab.maniphest.find(phids=blocked_tasks)
+        for k, v in block_details.iteritems():
+            blocked.append(v['id'])
+    else:
+        blocked = []
+
+    vlog('blocking: %s' % (str(blocked)))
+    tinfo['xblocking'] = blocked
 
     pmig = phabdb.phdb(db='fab_migration')
     current = pmig.sql_x("SELECT * from fab_meta where id = %s", PHABTICKETID)
     if current:
-        log('updating current record')
+        log('updating current record %s' % (PHABTICKETID,))
         update_values = (creation_priority,
                          json.dumps(tinfo),
                          json.dumps(comments),
@@ -179,7 +196,7 @@ def fetch(PHABTICKETID):
         pmig.sql_x("UPDATE fab_meta SET priority=%s, header=%s, comments=%s, modified=%s WHERE id = %s",
                     update_values)
     else:
-        log('inserting new record')
+        log('inserting new record %s' % (PHABTICKETID,))
         insert_values =  (PHABTICKETID,
                           creation_priority,
                           json.dumps(tinfo),
@@ -198,39 +215,35 @@ def run_fetch(fabid, tries=1):
         import_priority = pmig.sql_x("SELECT priority FROM fab_meta WHERE id = %s", (fabid,))
         if import_priority:
             log('updating existing record')
-            pmig.sql_x("UPDATE fab_meta SET priority=%s modified=%s WHERE id = %s", (ipriority['fetch_failed'],
-                                                                                    now(),
-                                                                                    fabid))
+            pmig.sql_x("UPDATE fab_meta SET priority=%s, modified=%s WHERE id = %s", (ipriority['fetch_failed'],
+                                                                                     now(),
+                                                                                     fabid))
         else:
             insert_values =  (fabid, ipriority['fetch_failed'], 'nan', 'nan', now(), now())
             pmig.sql_x("INSERT INTO fab_meta (id, priority, header, comments, created, modified) VALUES (%s, %s, %s, %s, %s, %s)",
                    insert_values)
         pmig.close()
-        print 'failed to grab %s' % (fabid,)
+        log('failed to grab %s' % (fabid,))
         return False
     try:
         if fetch(fabid):
-            print time.time()
-            print 'done with %s' % (fabid,)
+            vlog(str(time.time()))
+            log('done fetching %s' % (fabid,))
             return True
     except Exception as e:
         tries -= 1
         time.sleep(5)
         import traceback
         traceback.print_exc(file=sys.stdout)
-        print 'failed to grab %s (%s)' % (fabid, e)
+        log('failed to grab %s (%s)' % (fabid, e))
         return run_fetch(fabid, tries=tries)
 
 
-if sys.stdin.isatty():
-    bugs = sys.argv[1:]
-else:
-    bugs = sys.stdin.read().strip('\n').strip().split()
-
-bugs = [i for i in bugs if i.isdigit()]
-print len(bugs)
+bugs = return_bug_list()
+vlog(bugs)
+log("Fetching %s" % (len(bugs),))
 from multiprocessing import Pool
-pool = Pool(processes=10)
+pool = Pool(processes=7)
 _ =  pool.map(run_fetch, bugs)
 complete = len(filter(bool, _))
 failed = len(_) - complete

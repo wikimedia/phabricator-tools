@@ -7,10 +7,13 @@ from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import phabdb
 from wmfphablib import log
+from wmfphablib import vlog
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
 from wmfphablib import get_config_file
 from wmfphablib import now
+from wmfphablib import return_bug_list
+from wmfphablib import fablib
 import ConfigParser
 
 
@@ -28,16 +31,25 @@ def fetch(PHABTICKETID):
                        parser.get(parser_mode, 'certificate'),
                        parser.get(parser_mode, 'host'))
 
-    log(str(phab.user.whoami()))
     #dummy instance of phabapi
     phabm = phabmacros('', '', '')
     phabm.con = phab
 
     pmig = phabdb.phdb(db='fab_migration')
-    tid, import_priority, header, com, created, modified = pmig.sql_x("SELECT * FROM fab_meta WHERE id = %s", PHABTICKETID)
-    pmig.close()
 
-    log('priority: %d' % (import_priority,))
+    issue = pmig.sql_x("SELECT id FROM fab_meta WHERE id = %s", PHABTICKETID)
+    if not issue:
+        log('%s not present for migration' % (PHABTICKETID,))
+        return True
+
+    exists = phabdb.reference_ticket('%s%s' % (fablib.prepend, PHABTICKETID))
+    if exists:
+        log('reference ticket %s already exists' % (PHABTICKETID,))
+        return True
+
+    tid, import_priority, header, com, created, modified = pmig.sql_x("SELECT * FROM fab_meta WHERE id = %s", PHABTICKETID)
+
+    vlog('priority: %d' % (import_priority,))
 
     tinfo = json.loads(header)
     comments = json.loads(com)
@@ -45,7 +57,7 @@ def fetch(PHABTICKETID):
     proj_phids = []
     for pn in tinfo['xprojects']:
         proj_phids.append(phabm.ensure_project(pn))
-
+    vlog(proj_phids)
     priorities = {"Unbreak Now!": 100,
                   "Needs Triage": 90,
                   "High": 80,
@@ -61,8 +73,8 @@ def fetch(PHABTICKETID):
                                  priority=priorities[tinfo['priority']],
                                  auxiliary={"std:maniphest:external_reference":"fl%s" % (PHABTICKETID,)})
 
-    print 'Created', newticket['id']
-
+    log('Created phab ticket %s for %s' % (newticket['id'], PHABTICKETID))
+    vlog(newticket)
     #  0 {'xcommenter': {u'userName': u'uvhooligan', 
     #  u'phid': u'PHID-USER-lb2dbts4cdunqxzjqf2d', 
     #  u'realName': u'Un Ver Hooligan', 
@@ -77,14 +89,23 @@ def fetch(PHABTICKETID):
         created = epoch_to_datetime(v['created'])
         user = v['xcommenter']['userName']
         comment_body = "**%s** wrote on `%s`\n\n%s" % (user, created, v['text'])
-        phabm.task_comment(newticket['id'], comment_body)
+        vlog(phabm.task_comment(newticket['id'], comment_body))
+
+    if tinfo["status"] == "wontfix":
+        tinfo["status"] = 'resolved'
+
+    if tinfo['status'] != 'open':
+        log('set status %s' % (tinfo['status']))
+        vlog(phabm.task_comment(newticket['id'], '//importing issue status//'))
+        vlog(phabm.set_status(newticket['id'], tinfo['status']))
+
+    pmig.close()
     return True
 
 def run_fetch(fabid, tries=1):
     if tries == 0:
         pmig = phabdb.phdb(db='fab_migration')
         import_priority = pmig.sql_x("SELECT priority FROM fab_meta WHERE id = %s", (fabid,))
-
         if import_priority:
             log('updating existing record')
             pmig.sql_x("UPDATE fab_meta SET priority=%s, modified=%s WHERE id = %s", (ipriority['creation_failed'],
@@ -97,8 +118,16 @@ def run_fetch(fabid, tries=1):
         return False
     try:
         if fetch(fabid):
-            print time.time()
-            print 'done with %s' % (fabid,)
+            try:
+                pmig = phabdb.phdb(db='fab_migration')
+                pandmupdate = "UPDATE fab_meta SET priority=%s, modified=%s WHERE id = %s"
+                pmig.sql_x(pandmupdate, (ipriority['creation_success'],
+                                         now(),
+                                         fabid))
+                print time.time()
+                print 'done with %s' % (fabid,)
+            except:
+                return False
             return True
     except Exception as e:
         import traceback
@@ -109,15 +138,10 @@ def run_fetch(fabid, tries=1):
         return run_fetch(fabid, tries=tries)
 
 
-if sys.stdin.isatty():
-    bugs = sys.argv[1:]
-else:
-    bugs = sys.stdin.read().strip('\n').strip().split()
-
-bugs = [i for i in bugs if i.isdigit()]
+bugs =  return_bug_list()
 print len(bugs)
 from multiprocessing import Pool
-pool = Pool(processes=10)
+pool = Pool(processes=2)
 _ =  pool.map(run_fetch, bugs)
 complete = len(filter(bool, _))
 failed = len(_) - complete

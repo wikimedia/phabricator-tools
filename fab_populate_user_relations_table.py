@@ -7,22 +7,36 @@ from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import phabdb
 from wmfphablib import log
+from wmfphablib import vlog
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
 from wmfphablib import get_config_file
 from wmfphablib import now
+from wmfphablib import return_bug_list
 import ConfigParser
 
 
 configfile = get_config_file()
 
 
-def fetch(PHABTICKETID):
+def fetch(fabid):
     ausers = {}
-
     pmig = phabdb.phdb(db='fab_migration')
-    tid, import_priority, jheader, com, created, modified = pmig.sql_x("SELECT * FROM fab_meta WHERE id = %s", PHABTICKETID)
+    issue = pmig.sql_x("SELECT id FROM fab_meta WHERE id = %s", fabid)
+
+    if not issue:
+        log('issue %s does not exist for user population' % (fabid,))
+        return True
+
+    fpriority= pmig.sql_x("SELECT priority FROM fab_meta WHERE id = %s", fabid)
+    if fpriority[0] == ipriority['fetch_failed']:
+        log('issue %s does not fetched successfully for user population (failed fetch)' % (fabid,))
+        return True
+
+
+    tid, import_priority, jheader, com, created, modified = pmig.sql_x("SELECT * FROM fab_meta WHERE id = %s", fabid)
     header = json.loads(jheader)
+    vlog(str(header))
     relations = {}
     relations['author'] = header['xauthor']
     relations['cc'] = header['xccs']
@@ -41,14 +55,16 @@ def fetch(PHABTICKETID):
                 assigned = json.loads(jassigned[0])
             else:
                 assigned = []
-            if PHABTICKETID not in assigned:
-                assigned.append(PHABTICKETID)
+            if fabid not in assigned:
+                log("Assigning %s to %s" % (str(fabid), owner))
+                assigned.append(fabid)
+            vlog("owner %s" % (str(assigned),))
             pmig.sql_x("UPDATE user_relations SET assigned=%s, modified=%s WHERE user = %s", (json.dumps(assigned),
                                                                                               now(),
                                                                                               owner))
         else:
-            log('inserting new record')
-            assigned = json.dumps([PHABTICKETID])
+            vlog('inserting new record')
+            assigned = json.dumps([fabid])
             insert_values =  (owner,
                               assigned,
                               now(),
@@ -66,14 +82,15 @@ def fetch(PHABTICKETID):
                 authored = json.loads(jauthored[0])
             else:
                authored = []
-            if PHABTICKETID not in authored:
-                authored.append(PHABTICKETID)
+            if fabid not in authored:
+                authored.append(fabid)
+            vlog("author %s" % (str(authored),))
             pmig.sql_x("UPDATE user_relations SET author=%s, modified=%s WHERE user = %s", (json.dumps(authored),
                                                                                         now(),
                                                                                         relations['author']))
         else:
-            log('inserting new record')
-            authored = json.dumps([PHABTICKETID])
+            vlog('inserting new record')
+            authored = json.dumps([fabid])
             insert_values =  (relations['author'],
                               authored,
                               now(),
@@ -90,14 +107,15 @@ def fetch(PHABTICKETID):
                cc = json.loads(jcc[0])
             else:
                cc = []
-            if PHABTICKETID not in cc:
-                cc.append(PHABTICKETID)
+            if fabid not in cc:
+                cc.append(fabid)
+            vlog("cc %s" % (str(cc),))
             pmig.sql_x("UPDATE user_relations SET cc=%s, modified=%s WHERE user = %s", (json.dumps(cc),
                                                                                         now(),
                                                                                         ccuser))
         else:
-            log('inserting new record')
-            cc = json.dumps([PHABTICKETID])
+            vlog('inserting new record')
+            cc = json.dumps([fabid])
             insert_values =  (ccuser,
                               cc,
                               now(),
@@ -120,40 +138,25 @@ def fetch(PHABTICKETID):
 
 def run_fetch(fabid, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb(db='fab_migration')
-        import_priority = pmig.sql_x("SELECT priority FROM fab_meta WHERE id = %s", (fabid,))
-
-        if import_priority:
-            log('updating existing record')
-            pmig.sql_x("UPDATE fab_meta SET priority=%s, modified=%s WHERE id = %s", (ipriority['creation_failed'],
-                                                                                     now(),
-                                                                                     fabid))
-        else:
-            print "%s does not seem to exist" % (fabid)
-        pmig.close()
-        print 'failed to grab %s' % (fabid,)
+        log('failed to populate for %s' % (fabid,))
         return False
     try:
         if fetch(fabid):
-            print time.time()
-            print 'done with %s' % (fabid,)
+            vlog(str(time.time()))
+            log('done with %s' % (fabid,))
             return True
     except Exception as e:
         import traceback
         tries -= 1
         time.sleep(5)
         traceback.print_exc(file=sys.stdout)
-        print 'failed to grab %s (%s)' % (fabid, e)
+        log('failed to grab %s (%s)' % (fabid, e))
         return run_fetch(fabid, tries=tries)
 
 
-if sys.stdin.isatty():
-    bugs = sys.argv[1:]
-else:
-    bugs = sys.stdin.read().strip('\n').strip().split()
-
-bugs = [i for i in bugs if i.isdigit()]
-print len(bugs)
+bugs = return_bug_list()
+vlog(bugs)
+log("Count %s" % (str(len(bugs))))
 from multiprocessing import Pool
 pool = Pool(processes=10)
 _ =  pool.map(run_fetch, bugs)

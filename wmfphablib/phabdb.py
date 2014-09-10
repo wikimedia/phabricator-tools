@@ -14,14 +14,12 @@ def get_emails(modtime=0):
         return ''
     return info
 
-def set_tasks_blocked(blocker, blocked):
+def set_blocked_task(blocker, blocked):
     """sets two tasks in dependent state
     :param blocker: blocking tasks phid
     :param blocked: blocked tasks phid
     """    
     blocked_already = get_tasks_blocked(blocker)
-    print type(blocked), 'in', type(blocked_already)
-    print blocked, 'in', blocked_already
     if blocked in blocked_already:
         return
     p = phdb(db='phabricator_maniphest')
@@ -60,6 +58,15 @@ def get_user_relations():
         return ''
     return _
 
+
+def get_user_email_info(emailaddress):
+    pmig = phdb(db='phabricator_user')
+    sql = "SELECT userPHID, address, isVerified from user_email where address=%s"
+    info = pmig.sql_x(sql, emailaddress)
+    pmig.close()
+    if not info:
+        return ''
+    return info
 
 def get_verified_emails(modtime=0):
     pmig = phdb(db='phabricator_user')

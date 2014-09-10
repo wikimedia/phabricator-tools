@@ -16,9 +16,23 @@ def now():
 
 #import priority status meanings
 ipriority = {'creation_failed': 6,
+             'creation_success': 7,
              'fetch_failed': 5,
              'na': 0,
              'unresolved': 1}
+
+def return_bug_list():
+    if sys.stdin.isatty():
+        bugs = sys.argv[1:]
+    else:
+        bugs = sys.stdin.read().strip('\n').strip().split()
+
+    if '-' in bugs[0]:
+        start, stop = bugs[0].split('-')
+        bugs = range(int(start), int(stop) + 1)
+    else:
+        bugs = [i for i in bugs if i.isdigit()]
+    return bugs
 
 def datetime_to_epoch(date_time):
     return str((date_time - datetime.datetime(1970,1,1)).total_seconds())
@@ -29,9 +43,17 @@ def epoch_to_datetime(epoch, timezone='UTC'):
 
 def log(msg):
     msg = unicode(msg)
-    if '-v' in sys.argv:
+    if '-v' in ''.join(sys.argv):
         try:
             syslog.syslog(msg)
+            print msg
+        except:
+            print 'error logging output'
+
+def vlog(msg):
+    msg = unicode(msg)
+    if '-vv' in ''.join(sys.argv):
+        try:
             print '-> ', msg
         except:
             print 'error logging output'
