@@ -73,8 +73,11 @@ def fetch(PHABTICKETID):
                                  priority=priorities[tinfo['priority']],
                                  auxiliary={"std:maniphest:external_reference":"fl%s" % (PHABTICKETID,)})
 
+    phabdb.set_task_ctime(newticket['phid'], tinfo['dateCreated'])
+    log('setting ctime of %s for %s' % (tinfo['dateCreated'], newticket['phid']))
     log('Created phab ticket %s for %s' % (newticket['id'], PHABTICKETID))
     vlog(newticket)
+
     #  0 {'xcommenter': {u'userName': u'uvhooligan', 
     #  u'phid': u'PHID-USER-lb2dbts4cdunqxzjqf2d', 
     #  u'realName': u'Un Ver Hooligan', 
@@ -84,8 +87,8 @@ def fetch(PHABTICKETID):
     #  'created': 1409875492L, 'xuseremail': None, 
     #  'text': 'hi guys I hate email', 'last_edit': 1409875492L,
     #  'xuserphid': 'PHID-USER-lb2dbts4cdunqxzjqf2d'}
-    ocomments =  collections.OrderedDict(sorted(comments.items()))
-    for k, v in ocomments.iteritems():
+    csorted = sorted(comments.values(), key=lambda k: k['created']) 
+    for k, v in enumerate(csorted):
         created = epoch_to_datetime(v['created'])
         user = v['xcommenter']['userName']
         comment_body = "**%s** wrote on `%s`\n\n%s" % (user, created, v['text'])
@@ -99,6 +102,8 @@ def fetch(PHABTICKETID):
         vlog(phabm.task_comment(newticket['id'], '//importing issue status//'))
         vlog(phabm.set_status(newticket['id'], tinfo['status']))
 
+    log('setting modtime of %s for %s' % (tinfo['dateModified'], newticket['phid']))
+    phabdb.set_task_mtime(newticket['phid'], tinfo['dateModified'])
     pmig.close()
     return True
 

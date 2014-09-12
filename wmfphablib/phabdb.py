@@ -5,6 +5,20 @@ import traceback
 import syslog
 import time
 
+def set_task_mtime(taskphid, mtime):
+    """set manual epoch modtime for task"""
+    p = phdb(db='phabricator_maniphest')
+    _ = p.sql_x("UPDATE maniphest_task SET dateModified=%s WHERE phid=%s", (mtime, taskphid))
+    p.close()
+    return _
+
+def set_task_ctime(taskphid, ctime):
+    """set manual epoch create time for task"""
+    p = phdb(db='phabricator_maniphest')
+    _ = p.sql_x("UPDATE maniphest_task SET dateCreated=%s WHERE phid=%s", (ctime, taskphid))
+    p.close()
+    return _
+
 def get_emails(modtime=0):
     pmig = phdb(db='phabricator_user')
     sql = "SELECT address from user_email"
