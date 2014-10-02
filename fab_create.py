@@ -74,7 +74,7 @@ def fetch(PHABTICKETID):
                                  auxiliary={"std:maniphest:external_reference":"fl%s" % (PHABTICKETID,)})
 
     phabdb.set_task_ctime(newticket['phid'], tinfo['dateCreated'])
-    log('setting ctime of %s for %s' % (tinfo['dateCreated'], newticket['phid']))
+    log('setting ctime of %s for %s' % (tinfo['dateCreated'], newticket['id']))
     log('Created phab ticket %s for %s' % (newticket['id'], PHABTICKETID))
     vlog(newticket)
 
@@ -102,9 +102,10 @@ def fetch(PHABTICKETID):
         vlog(phabm.task_comment(newticket['id'], '//importing issue status//'))
         vlog(phabm.set_status(newticket['id'], tinfo['status']))
 
-    log('setting modtime of %s for %s' % (tinfo['dateModified'], newticket['phid']))
     phabdb.set_task_mtime(newticket['phid'], tinfo['dateModified'])
+    log('setting modtime of %s for %s' % (tinfo['dateModified'], newticket['id']))
     pmig.close()
+    time.sleep(1)
     return True
 
 def run_fetch(fabid, tries=1):
@@ -146,7 +147,7 @@ def run_fetch(fabid, tries=1):
 bugs =  return_bug_list()
 print len(bugs)
 from multiprocessing import Pool
-pool = Pool(processes=2)
+pool = Pool(processes=1)
 _ =  pool.map(run_fetch, bugs)
 complete = len(filter(bool, _))
 failed = len(_) - complete

@@ -24,6 +24,7 @@ class phabapi:
             return
         log('reference ticket found for %s' % ('fl%s' % (id,),))
         newid = self.ticket_id_by_phid(refs[0])
+        log("Updating author for %s to %s" % (refs, phid))
         phabdb.set_task_author(phid, newid)
 
     def task_comment(self, task, msg):

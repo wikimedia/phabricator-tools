@@ -9,6 +9,7 @@ from phabapi import phabapi as Phab
 from phabdb import phdb
 from phabdb import mailinglist_phid
 from phabdb import set_project_icon
+from config import cfile as configfile
 import time
 
 def now():
@@ -19,6 +20,8 @@ ipriority = {'creation_failed': 6,
              'creation_success': 7,
              'fetch_failed': 5,
              'na': 0,
+             'update_success': 8,
+             'update_failed': 9,
              'unresolved': 1}
 
 def return_bug_list():
@@ -63,9 +66,3 @@ def save_attachment(name, data):
     f.write(data)
     f.close()
 
-def get_config_file():
-    configfile = '/etc/gz_fetch.conf'
-    if not os.path.exists(configfile):
-        print 'no config file: %s' % (configfile,)
-        return ''
-    return configfile

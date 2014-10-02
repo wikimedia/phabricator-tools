@@ -1,3 +1,8 @@
+IMPORTANT:
+
+    * bot user must be a member of importbots group
+    * /etc/phabtools.conf must exist
+
 This repo will eventually be used for tooling surrounding
 development in phabricator and related tools.
 
@@ -61,7 +66,25 @@ CREATE TABLE user_relations
                              modified int(12) NOT NULL
 );
 
+
+create table user_relations_job
+(
+			id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+			pid INT(12),
+			start INT(12),
+			finish INT(12),
+			status INT,
+			start_epoch INT(12),
+			finish_epoch INT(12),
+			user_count INT,
+			issue_count INT,
+			completed INT,
+			failed INT,
+			modified INT(12)
+);
+
 create table task_relations (id INT, priority INT, blocks TEXT(1000), modified INT(12));
+
 
 ---------------------------------
 

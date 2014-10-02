@@ -19,8 +19,7 @@ import os
 import re
 import MySQLdb
 from phabdb import archive_project
-import ConfigParser
-
+from wmfphablib import config
 import phabricator
 from phabricator import Phabricator
 
@@ -36,26 +35,23 @@ def log(msg):
 
 def main(bugid):
 
+    phab = Phabricator(config.phab_user,
+                       config.phab_cert,
+                       config.phab_host)
 
-    parser = ConfigParser.SafeConfigParser()
-    parser_mode = 'phab'
-    parser.read('/etc/gz_fetch.conf')
-    phab = Phabricator(username=parser.get(parser_mode, 'username'),
-                   certificate=parser.get(parser_mode, 'certificate'),
-                   host=parser.get(parser_mode, 'host'))
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
 
-    parser_mode = 'bz'
-    server = xmlrpclib.ServerProxy(parser.get(parser_mode, 'url'), use_datetime=True)
+    server = xmlrpclib.ServerProxy(config.Bugzilla_url, use_datetime=True)
 
     kwargs = { 'names': 'Wikimedia',
-               'Bugzilla_login': parser.get(parser_mode, 'Bugzilla_login'),
-               'Bugzilla_password': parser.get(parser_mode, 'Bugzilla_password')}
+               'Bugzilla_login': config.Bugzilla_login,
+               'Bugzilla_password': config.Bugzilla_password}
 
     #http://www.bugzilla.org/docs/tip/en/html/api/Bugzilla/WebService/Bug.html#attachments
     attached = server.Product.get(kwargs)['products']
     print attached
-    #print archive_project('greenproject')
-
     
 
 if sys.stdin.isatty():

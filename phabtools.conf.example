@@ -1,0 +1,37 @@
+[general]
+dbhost = localhost
+
+[phmanifest]
+user = root
+passwd = labspass
+
+[phuser]
+user = phuser
+passwd = labspass
+
+[fabmigrate]
+db = fab_migration
+user = fabmigrate
+passwd = labspass
+limit = 1
+multi = 1
+
+[phab]
+certificate = asdf
+host = https://phabricator.wikimedia.org/api/
+username = flimport
+
+[oldfab]
+cert = asdf
+host = http://fabapi.wmflabs.org/api/
+user = admin
+
+[bz]
+url = ''
+Bugzilla_login = ''
+Bugzilla_password = ''
+
+[bzmigrate]
+db = ''
+user = ''
+passwd = ''
