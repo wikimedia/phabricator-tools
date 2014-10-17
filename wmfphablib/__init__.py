@@ -40,8 +40,15 @@ def return_bug_list():
 
     if '-' in bugs[0]:
         start, stop = bugs[0].split('-')
+
         bugrange = range(int(start), int(stop) + 1)
         bugs = [str(b) for b in bugrange]
+
+        for arg in sys.argv:
+            if arg.startswith('x'):
+                sample = int(arg.strip('x'))
+                vlog("sample rate found %s" % (sample,))
+                bugs = [b for b in bugs if int(b) % sample == 0]
     else:
         bugs = [i for i in bugs if i.isdigit()]
     log("Bugs count: %d" % (len(bugs)))
