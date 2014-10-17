@@ -1,6 +1,54 @@
+import os
 import sys
 import json
 import subprocess
+import config
+import time
+import datetime
+import syslog
+
+def datetime_to_epoch(date_time):
+    return str((date_time - datetime.datetime(1970,1,1)).total_seconds())
+
+def epoch_to_datetime(epoch, timezone='UTC'):
+    return str((datetime.datetime.fromtimestamp(int(float(epoch))
+           ).strftime('%Y-%m-%d %H:%M:%S'))) + " (%s)" % (timezone,)
+
+def errorlog(msg):
+    msg = unicode(msg)
+    try:
+        syslog.syslog(msg)
+        print >> sys.stderr, msg
+    except:
+        print 'error logging, well...error output'
+
+def log(msg):
+    msg = unicode(msg)
+    if '-v' in ''.join(sys.argv):
+        try:
+            syslog.syslog(msg)
+            print msg
+        except:
+            print 'error logging output'
+
+def vlog(msg):
+    msg = unicode(msg)
+    if '-vv' in ''.join(sys.argv):
+        try:
+            print '-> ', msg
+        except:
+            print 'error logging output'
+
+def update_blog(source, complete, failed, user_count, issue_count, apicon):
+    title = "%s completed %s / failed %s" % (epoch_to_datetime(time.time()),
+                                             complete,
+                                             failed)
+    print title
+    body = "%s:\nUsers updated: %s\nIssues affected: %s" % (source, user_count, issue_count)
+    return apicon.blog_update(apicon.user, title, body)
+
+def source_name(path):
+    return os.path.basename(path.strip('.py'))
 
 def can_edit_ref():
     f = open('/srv/phab/phabricator/conf/local/local.json', 'r').read()

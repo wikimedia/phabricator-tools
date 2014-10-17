@@ -3,7 +3,6 @@ import multiprocessing
 import time
 import yaml
 import ast
-import base64
 import json
 import sys
 import xmlrpclib
@@ -26,7 +25,6 @@ from wmfphablib import util
 from wmfphablib import datetime_to_epoch
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
-from email.parser import Parser
 
 def create(bugid):
 
@@ -83,7 +81,7 @@ def create(bugid):
         a['name'] = upload['name']
         a['objectName'] = upload['objectName']
         uploads[a['id']] = a
-    log('Attachment count: ' + str(len(uploads.keys())))
+    log('%s attachment count: %s' % (bugid, str(len(uploads.keys()))))
 
     #list of projects to add to ticket
     ptags = []

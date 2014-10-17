@@ -21,7 +21,7 @@ from wmfphablib import return_bug_list
 def populate(bugid):
 
     def add_comment_ref(owner):    
-        """ adds an issue reference to a user
+        """ adds an issue reference to a user or later updating their comments
         """
         ouser = pmig.sql_x("SELECT user FROM user_relations_comments WHERE user = %s", (owner,))
         if ouser:
@@ -69,7 +69,7 @@ def populate(bugid):
     xcom = json.loads(xcomments)
     commenters = [c['author'] for c in com if c['count'] > 0]
     commenters = set(commenters)
-    log("Commenters for issue %s: %s" % (bugid, str(commenters)))
+    log("commenters for issue %s: %s" % (bugid, str(commenters)))
     for c in commenters:
         add_comment_ref(c)
     pmig.close()

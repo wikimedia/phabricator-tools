@@ -119,25 +119,6 @@ def get_user_histories(verified):
     pmig.close()
     return [util.translate_json_dict_items(d) for d in histories]
 
-def get_verified_users(modtime, limit=None):
-    #Find the task in new Phabricator that matches our lookup
-    verified = phabdb.get_verified_emails(modtime=modtime, limit=limit)
-    create_times = [v[2] for v in verified]
-    try:
-        newest = max(create_times)
-    except ValueError:
-        newest = modtime
-    return verified, newest
-
-def get_verified_user(email):
-    phid, email, is_verified = phabdb.get_user_email_info(email)
-    log("Single verified user: %s, %s, %s" % (phid, email, is_verified))
-    if is_verified:
-        return [(phid, email)]
-    else:
-        log("%s is not a verified email" % (email,))
-        return [()]
-
 
 def main():
     parser = argparse.ArgumentParser(description='Updates user header metadata from bugzilla')
@@ -153,13 +134,13 @@ def main():
 
     if args.a:
         starting_epoch = phabdb.get_user_relations_last_finish(pmig)
-        users, finish_epoch = get_verified_users(starting_epoch, config.fab_limit)
+        users, finish_epoch = phabdb.get_verified_users(starting_epoch, config.fab_limit)
     elif args.email:
-        users = get_verified_user(args.email)
+        users = phabdb.get_verified_user(args.email)
         starting_epoch = 0
         finish_epoch = 0
     elif args.starting_epoch:
-        users, finish_epoch = get_verified_users(args.starting_epoch)
+        users, finish_epoch = phabdb.get_verified_users(args.starting_epoch)
         starting_epoch = args.starting_epoch
     else:
         parser.print_help()
@@ -184,9 +165,11 @@ def main():
     log("Issue Count %s" % (str(issue_count)))
 
     pid = os.getpid()
+    source = util.source_name(sys.argv[0])
     phabdb.user_relations_start(pid,
+                                source,
                                 int(time.time()),
-                                0,
+                                ipriority['na'],
                                 starting_epoch,
                                 user_count, issue_count, pmig)
 
@@ -203,8 +186,12 @@ def main():
                                  complete,
                                  failed,
                                  pmig)
-    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
+
+    pm = phabmacros(config.phab_user, config.phab_cert, config.phab_host)
+    vlog(util.update_blog(source, complete, failed, user_count, issue_count, pm))
+
     pmig.close()
+    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
 
 if __name__ == '__main__':
     main()

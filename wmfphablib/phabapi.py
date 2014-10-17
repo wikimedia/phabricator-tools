@@ -1,14 +1,18 @@
-def log(m):
-    pass
-
 import base64
 import phabricator
 from phabricator import Phabricator
 import phabdb
+from . import log
+from . import vlog
+from . import errorlog as elog
 
 class phabapi:
 
     def __init__(self, user, cert, host):
+
+        self.user = user
+        self.cert = cert
+        self.host = host
 
         if host:
             self.con = Phabricator(username=user,
@@ -16,6 +20,17 @@ class phabapi:
                                 host=host)
         else:
             self.con = None
+
+
+    def blog_update(self, botname, title, body):
+        blogphid = phabdb.get_bot_blog(botname)
+        if blogphid is None:
+            elog('blogphid is none')
+            return
+        return self.con.phame.createpost(blogPHID=blogphid,
+                                         body=body,
+                                         title=title,
+                                         phameTitle=title)
 
     def sync_assigned(self, userphid, id, prepend):
         refs = phabdb.reference_ticket('%s%s' % (prepend, id))
@@ -27,7 +42,7 @@ class phabapi:
             log('current owner found for => %s' % (str(id),))
             return current
         log('assigning T%s to %s' % (str(id), userphid))
-        return self.con.maniphest.update(phid=refs[0], ownerPHID=userphid)
+        return phabdb.set_issue_assigned(refs[0], userphid)
 
     def synced_authored(self, phid, id, ref):
         refs = phabdb.reference_ticket('%s%s' % (ref, id))
@@ -65,7 +80,7 @@ class phabapi:
 
         existing_proj = self.con.project.query(names=[project_name])
         if not existing_proj['data']:
-            log('need to make: ' + project_name)
+            log('need to create project(s) ' + project_name)
             try:
                 new_proj = self.con.project.create(name=project_name, members=pmembers)
             #XXX: Bug where we have to specify a members array!

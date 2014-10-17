@@ -16,20 +16,20 @@ from config import fabmigrate_passwd
 
 def get_user_relations_last_finish(dbcon):
     #get_user_relations_last_finish(pmig)
-    fin = dbcon.sql_x("SELECT max(finish_epoch) from user_relations_job", ())
+    fin = dbcon.sql_x("SELECT max(finish_epoch) from user_relations_jobs", ())
     try:
         return int(fin[0][0])
     except:
         return 1
 
-def user_relations_start(pid, start, status, start_epoch, user_count, issue_count, dbcon):
-    insert_values = (pid, start, status, start_epoch, user_count, issue_count, int(time.time()))
-    query = "INSERT INTO user_relations_job (pid, start, status, start_epoch, user_count, issue_count, modified) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+def user_relations_start(pid, source, start, status, start_epoch, user_count, issue_count, dbcon):
+    insert_values = (pid, source, start, status, start_epoch, user_count, issue_count, int(time.time()))
+    query = "INSERT INTO user_relations_jobs (pid, source, start, status, start_epoch, user_count, issue_count, modified) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
     return dbcon.sql_x(query, insert_values)
 
 def user_relations_finish(pid, finish, status, finish_epoch, completed, failed, dbcon):
     update_values = (finish, status, finish_epoch, completed, failed, int(time.time()), pid)
-    return dbcon.sql_x("UPDATE user_relations_job SET finish=%s, status=%s, finish_epoch=%s, completed=%s , failed=%s, modified=%s WHERE pid = %s",
+    return dbcon.sql_x("UPDATE user_relations_jobs SET finish=%s, status=%s, finish_epoch=%s, completed=%s , failed=%s, modified=%s WHERE pid = %s",
                   update_values)
 
 def get_user_relations_priority(user, dbcon):
@@ -80,6 +80,13 @@ def get_user_migration_comment_history(user, dbcon):
         return ()
     return saved_history[0]
 
+def get_bot_blog(botname):
+    p = phdb(db='phabricator_phame', user=phuser_user, passwd=phuser_passwd)
+    _ = p.sql_x("SELECT phid from phame_blog where name=%s", ('%s_updates' % (botname,)), limit=1)
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
 def is_bot(userphid):
     p = phdb(db='phabricator_user', user=phuser_user, passwd=phuser_passwd)
     isbot = p.sql_x("SELECT isSystemAgent from user where phid=%s", (userphid,), limit=1)
@@ -102,6 +109,11 @@ def last_comment(phid):
 def set_issue_status(taskphid, status):
     p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
     p.sql_x("UPDATE maniphest_task SET status=%s WHERE phid=%s", (status, taskphid))
+    p.close()
+
+def set_issue_assigned(taskphid, userphid):
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    p.sql_x("UPDATE maniphest_task SET ownerPHID=%s WHERE phid=%s", (userphid, taskphid))
     p.close()
 
 def set_comment_content(transxphid, content):
@@ -219,6 +231,15 @@ def get_user_relations():
         return ''
     return _
 
+def get_verified_user(email):
+    phid, email, is_verified = get_user_email_info(email)
+    log("Single specified user: %s, %s, %s" % (phid, email, is_verified))
+    if is_verified:
+        return [(phid, email)]
+    else:
+        log("%s is not a verified email" % (email,))
+        return [()]
+
 def get_user_email_info(emailaddress):
     p = phdb(db='phabricator_user', user=phuser_user, passwd=phuser_passwd)
     sql = "SELECT userPHID, address, isVerified from user_email where address=%s"
@@ -226,6 +247,16 @@ def get_user_email_info(emailaddress):
     _ = p.sql_x(sql, emailaddress)
     p.close()
     return _[0] or ''
+
+def get_verified_users(modtime, limit=None):
+    #Find the task in new Phabricator that matches our lookup
+    verified = get_verified_emails(modtime=modtime, limit=limit)
+    create_times = [v[2] for v in verified]
+    try:
+        newest = max(create_times)
+    except ValueError:
+        newest = modtime
+    return verified, newest
 
 def get_verified_emails(modtime=0, limit=None):
     p = phdb(db='phabricator_user', user=phuser_user, passwd=phuser_passwd)
