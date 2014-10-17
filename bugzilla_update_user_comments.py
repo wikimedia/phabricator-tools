@@ -39,7 +39,7 @@ def update(user):
         log("%s is a bot no action" % (user['user']))
         return True
 
-    epriority = phabdb.get_user_relations_priority(user['user'], pmig)
+    epriority = phabdb.get_user_relations_comments_priority(user['user'], pmig)
     if epriority and len(epriority[0]) > 0:
         if epriority[0][0] == ipriority['update_success']:
             log('Skipping %s as already updated' % (user['user']))

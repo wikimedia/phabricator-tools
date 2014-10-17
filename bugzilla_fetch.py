@@ -5,6 +5,7 @@ import json
 import sys
 import xmlrpclib
 import os
+import datetime
 from wmfphablib import log
 from wmfphablib import vlog
 from wmfphablib import errorlog as elog
@@ -31,12 +32,18 @@ def fetch(bugid):
     #grabbing one bug at a time for now
     buginfo = server.Bug.get(kwargs)['bugs']	
     buginfo =  buginfo[0]
-    com = server.Bug.comments(kwargs)['bugs'][bugid]['comments']
+    com = server.Bug.comments(kwargs)['bugs'][str(bugid)]['comments']
     bug_id = com[0]['bug_id']
 
     #have to do for json
     buginfo['last_change_time'] = datetime_to_epoch(buginfo['last_change_time'])
     buginfo['creation_time'] = datetime_to_epoch(buginfo['creation_time'])
+
+    if 'flags' in buginfo:
+        for flag in buginfo['flags']:
+            for k, v in flag.iteritems():
+                if isinstance(v, datetime.datetime):
+                    flag[k] = datetime_to_epoch(v)
 
     for c in com:
         c['creation_time'] = datetime_to_epoch(c['creation_time'])

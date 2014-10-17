@@ -233,11 +233,11 @@ def get_user_relations():
 
 def get_verified_user(email):
     phid, email, is_verified = get_user_email_info(email)
-    log("Single specified user: %s, %s, %s" % (phid, email, is_verified))
+    #log("Single specified user: %s, %s, %s" % (phid, email, is_verified))
     if is_verified:
         return [(phid, email)]
     else:
-        log("%s is not a verified email" % (email,))
+        #log("%s is not a verified email" % (email,))
         return [()]
 
 def get_user_email_info(emailaddress):
@@ -363,7 +363,7 @@ def set_project_icon(project, icon='briefcase', color='blue'):
     elif icon == 'people':
         color = 'violet'
     elif icon == 'truck':
-        color == 'orange'
+        color = 'orange'
 
     p = phdb(db='phabricator_project', user=phuser_user, passwd=phuser_passwd)
     _ = p.sql_x("UPDATE project SET icon=%s, color=%s WHERE name=%s", ('fa-' + icon, color, project))
@@ -379,15 +379,20 @@ def set_task_author(authorphid, id):
 def add_task_cc_by_ref(userphid, oldid):
     refs = reference_ticket('bz%s' % (oldid,))
     if not refs:
-        log('reference ticket not found for %s' % ('bz%s' % (oldid,),))
+        #log('reference ticket not found for %s' % ('bz%s' % (oldid,),))
         return
     return add_task_cc(refs[0], userphid)
 
 def add_task_cc(ticketphid, userphid):
     p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
     ccq = "SELECT ccPHIDs FROM maniphest_task WHERE phid = %s"
-    jcc_list = p.sql_x(ccq, ticketphid)[0]
-    cc_list = json.loads(jcc_list[0])
+    jcc_list = p.sql_x(ccq, ticketphid)
+    #XXXX: TESTING
+    #HAD TO PURGE SECURITY TICKETS FOR IGNORE NONE RETURN FOR TESTING ONLY
+    if jcc_list is None:
+        return
+    #####
+    cc_list = json.loads(jcc_list[0][0])
     if userphid not in cc_list:
         cc_list.append(userphid)
     p.sql_x("UPDATE maniphest_task SET ccPHIDs=%s WHERE phid=%s", (json.dumps(cc_list), ticketphid))
