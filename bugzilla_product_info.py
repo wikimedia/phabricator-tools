@@ -1,12 +1,4 @@
 #!/usr/bin/env python
-"""
-
-WIP for fetching information about products to migrate
-as project state to phabricator
-
-"""
-
-
 import yaml
 import ast
 import base64
@@ -20,18 +12,10 @@ import re
 import MySQLdb
 from phabdb import archive_project
 from wmfphablib import config
+from wmfphablib import log
+from wmfphablib import vlog
 import phabricator
 from phabricator import Phabricator
-
-def log(msg):
-    import syslog
-    msg = unicode(msg)
-    if '-v' in sys.argv:
-        try:
-            syslog.syslog(msg)
-            print '-> ', msg
-        except:
-            print 'error logging output'
 
 def main(bugid):
 

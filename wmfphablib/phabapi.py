@@ -17,12 +17,24 @@ class phabapi:
         else:
             self.con = None
 
-    def synced_authored(self, phid, id):
-        refs = phabdb.reference_ticket('fl%s' % (id,))
+    def sync_assigned(self, userphid, id, prepend):
+        refs = phabdb.reference_ticket('%s%s' % (prepend, id))
         if not refs:
-            log('reference ticket not found for %s' % ('fl%s' % (id,),))
+            log('reference ticket not found for %s' % ('%s%s' % (prepend, id),))
             return
-        log('reference ticket found for %s' % ('fl%s' % (id,),))
+        current = self.con.maniphest.query(phids=[refs[0]])
+        if current[current.keys()[0]]['ownerPHID']:
+            log('current owner found for => %s' % (str(id),))
+            return current
+        log('assigning T%s to %s' % (str(id), userphid))
+        return self.con.maniphest.update(phid=refs[0], ownerPHID=userphid)
+
+    def synced_authored(self, phid, id, ref):
+        refs = phabdb.reference_ticket('%s%s' % (ref, id))
+        if not refs:
+            log('reference ticket not found for %s' % ('%s%s' % (ref, id),))
+            return
+        log('reference ticket found for %s' % ('%s%s' % (ref, id),))
         newid = self.ticket_id_by_phid(refs[0])
         log("Updating author for %s to %s" % (refs, phid))
         phabdb.set_task_author(phid, newid)

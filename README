@@ -27,6 +27,7 @@ CREATE TABLE bugzilla_meta (
                              priority INT,
                              header TEXT(10000),
                              comments TEXT(100000), 
+                             xcomments TEXT(100000), 
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
                             );
@@ -62,6 +63,16 @@ CREATE TABLE user_relations
                              assigned TEXT(10000),
                              cc TEXT(10000),
                              author TEXT(10000),
+                             created int(12) NOT NULL,
+                             modified int(12) NOT NULL
+);
+
+CREATE TABLE user_relations_comments
+(
+                             id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                             priority INT,
+                             user TEXT(1000),
+                             issues TEXT(10000),
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
 );

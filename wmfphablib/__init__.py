@@ -15,6 +15,9 @@ import time
 def now():
     return int(time.time())
 
+def tflatten(t_of_tuples):
+    return [element for tupl in t_of_tuples for element in tupl]
+
 #import priority status meanings
 ipriority = {'creation_failed': 6,
              'creation_success': 7,
@@ -32,9 +35,11 @@ def return_bug_list():
 
     if '-' in bugs[0]:
         start, stop = bugs[0].split('-')
-        bugs = range(int(start), int(stop) + 1)
+        bugrange = range(int(start), int(stop) + 1)
+        bugs = [str(b) for b in bugrange]
     else:
         bugs = [i for i in bugs if i.isdigit()]
+    log("Bugs count: %d" % (len(bugs)))
     return bugs
 
 def datetime_to_epoch(date_time):
@@ -43,6 +48,14 @@ def datetime_to_epoch(date_time):
 def epoch_to_datetime(epoch, timezone='UTC'):
     return str((datetime.datetime.fromtimestamp(int(float(epoch))
            ).strftime('%Y-%m-%d %H:%M:%S'))) + " (%s)" % (timezone,)
+
+def errorlog(msg):
+    msg = unicode(msg)
+    try:
+        syslog.syslog(msg)
+        print >> sys.stderr, msg
+    except:
+        print 'error logging, well...error output'
 
 def log(msg):
     msg = unicode(msg)

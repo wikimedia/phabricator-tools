@@ -10,24 +10,27 @@ from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import phabdb
 from wmfphablib import log
-from wmfphablib import config
-from wmfphablib import util
 from wmfphablib import vlog
+from wmfphablib import errorlog as elog
+from wmfphablib import bzlib
+from wmfphablib import util
+from wmfphablib import config
 from wmfphablib import epoch_to_datetime
+from wmfphablib import ipriority
 from wmfphablib import now
 from wmfphablib import return_bug_list
 from wmfphablib import ipriority
 
 
 def update(user):
-    vlog(user)
+
     phab = Phabricator(config.phab_user,
                        config.phab_cert,
                        config.phab_host)
 
-    pmig = phabdb.phdb(db=config.fabmigrate_db,
-                       user=config.fabmigrate_user,
-                       passwd=config.fabmigrate_passwd)
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
 
     phabm = phabmacros('', '', '')
     phabm.con = phab
@@ -37,9 +40,10 @@ def update(user):
         return True
 
     epriority = phabdb.get_user_relations_priority(user['user'], pmig)
-    if epriority and epriority[0] == ipriority['update_success']:
-        log('Skipping %s as already updated' % (user['user']))
-        return True
+    if epriority and len(epriority[0]) > 0:
+        if epriority[0][0] == ipriority['update_success']:
+            log('Skipping %s as already updated' % (user['user']))
+            return True
 
     # 'author': [409, 410, 411, 404, 412],
     # 'cc': [221, 69, 203, 268, 261, 8],
@@ -51,11 +55,11 @@ def update(user):
 
     if user['assigned']:
         for ag in user['assigned']:
-             vlog(phabm.sync_assigned(user['userphid'], ag, 'fl'))
+             vlog(phabm.sync_assigned(user['userphid'], ag, bzlib.prepend))
 
     if user['author']:
         for a in user['author']:
-            vlog(phabm.synced_authored(user['userphid'], a, 'fl'))
+            vlog(phabm.synced_authored(user['userphid'], a, bzlib.prepend))
 
     if user['cc']:
         for ccd in user['cc']:
@@ -65,45 +69,42 @@ def update(user):
     if current:
         log(phabdb.set_user_relations_priority(ipriority['update_success'], user['user'], pmig))
     else:
-        log('%s user does not exist to update' % (user['user']))
+        elog('%s user does not exist to update' % (user['user']))
         return False
     pmig.close()
     return True
 
 def run_update(user, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb(db=config.fabmigrate_db,
-                       user=config.fabmigrate_user,
-                       passwd=config.fabmigrate_passwd)
+        pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
         current = phabdb.get_user_migration_history(user['user'], pmig)
         if current:
-           log(phabdb.set_user_relations_priority(ipriority['update_failed'], user['user'], pmig))
+           elog(phabdb.set_user_relations_priority(ipriority['update_failed'], user['user'], pmig))
         else:
-            log('%s user does not exist to update' % (user['user']))
+            elog('%s user does not exist to update' % (user['user']))
         pmig.close()
-        log('final fail to update %s' % (user['user'],))
+        elog('final fail to update %s' % (user['user'],))
         return False
     try:
-        if update(user):
-            log('%s done with %s' % (str(int(time.time())), user,))
-            return True
+        return update(user)
     except Exception as e:
         import traceback
         tries -= 1
         time.sleep(5)
         traceback.print_exc(file=sys.stdout)
-        log('failed to update %s (%s)' % (user, e))
+        elog('failed to update %s' % (user,))
         return run_update(user, tries=tries)
 
 def get_user_histories(verified):
     histories = []
-    pmig = phabdb.phdb(db=config.fabmigrate_db,
-                       user=config.fabmigrate_user,
-                       passwd=config.fabmigrate_passwd)
-    #print 'verified', verified
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
+
     for v in verified:
         vlog(str(v))
-        # Get user history from old fab system
         saved_history = phabdb.get_user_migration_history(v[1], pmig)
         if not saved_history:
             log('%s verified email has no saved history' % (v[1],))
@@ -133,32 +134,24 @@ def get_verified_users(modtime, limit=None):
 
 def get_verified_user(email):
     phid, email, is_verified = phabdb.get_user_email_info(email)
-    log("Single verified user: %s, %s, %s" % (phid, email, is_verified))
+    log("Single specified user: %s, %s, %s" % (phid, email, is_verified))
     if is_verified:
         return [(phid, email)]
     else:
         log("%s is not a verified email" % (email,))
         return [()]
 
-def last_finish():
-    pmig = phabdb.phdb(db=config.fabmigrate_db,
-                       user=config.fabmigrate_user,
-                       passwd=config.fabmigrate_passwd)
-    pmig.close()
-    ftime = phabdb.get_user_relations_last_finish(pmig)
-    return ftime or 1
-
 def main():
-    parser = argparse.ArgumentParser(description='Updates user metadata from fab')
+    parser = argparse.ArgumentParser(description='Updates user header metadata from bugzilla')
     parser.add_argument('-a', action="store_true", default=False)
     parser.add_argument('-e', action="store", dest='email')
     parser.add_argument('-m', action="store", dest="starting_epoch", default=None)
     parser.add_argument('-v', action="store_true", default=False)
     args =  parser.parse_args()
 
-    pmig = phabdb.phdb(db=config.fabmigrate_db,
-                       user=config.fabmigrate_user,
-                       passwd=config.fabmigrate_passwd)
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
 
     if args.a:
         starting_epoch = phabdb.get_user_relations_last_finish(pmig)
@@ -196,17 +189,14 @@ def main():
     log("User Count %s" % (str(user_count)))
     log("Issue Count %s" % (str(issue_count)))
 
-    if user_count == 0:
-        log("Existing as there are no new verified users")
-        sys.exit()
-
-
     pid = os.getpid()
     phabdb.user_relations_start(pid,
                                 int(time.time()),
                                 0,
                                 starting_epoch,
                                 user_count, issue_count, pmig)
+
+
     from multiprocessing import Pool
     pool = Pool(processes=config.fab_multi)
     _ =  pool.map(run_update, histories)
@@ -219,8 +209,8 @@ def main():
                                  complete,
                                  failed,
                                  pmig)
-    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
     pmig.close()
+    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
 
 if __name__ == '__main__':
     main()

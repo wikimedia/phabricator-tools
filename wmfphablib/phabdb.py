@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import json
 import MySQLdb
 import traceback
 import syslog
@@ -34,6 +35,9 @@ def user_relations_finish(pid, finish, status, finish_epoch, completed, failed, 
 def get_user_relations_priority(user, dbcon):
     return dbcon.sql_x("SELECT priority from user_relations where user = %s", user)
 
+def get_user_relations_comments_priority(user, dbcon):
+    return dbcon.sql_x("SELECT priority from user_relations_comments where user = %s", user)
+
 def set_user_relations_priority(priority, user, dbcon):
     """Set user status for data import
     :param priority: int
@@ -42,6 +46,15 @@ def set_user_relations_priority(priority, user, dbcon):
      """
     return dbcon.sql_x("UPDATE user_relations SET priority=%s, modified=%s WHERE user = %s",
                   (priority, time.time(), user))
+
+def set_user_relations_comments_priority(priority, user, dbcon):
+    """Set user status for data import
+    :param priority: int
+    :param user: user email
+    :param dbcon: db connection
+     """
+    return dbcon.sql_x("UPDATE user_relations_comments SET priority=%s, modified=%s WHERE user = %s",
+                       (priority, time.time(), user))
 
 def get_user_migration_history(user, dbcon):
     """ get user history from import source
@@ -54,6 +67,76 @@ def get_user_migration_history(user, dbcon):
     if saved_history is None:
         return ()
     return saved_history[0]
+
+def get_user_migration_comment_history(user, dbcon):
+    """ get user comment history from import source
+    :param user: user email
+    :param dbcon: db connection
+    :returns: saved history output
+     """
+    hq = "SELECT issues, created, modified FROM user_relations_comments WHERE user = %s"
+    saved_history = dbcon.sql_x(hq, user)
+    if saved_history is None:
+        return ()
+    return saved_history[0]
+
+def is_bot(userphid):
+    p = phdb(db='phabricator_user', user=phuser_user, passwd=phuser_passwd)
+    isbot = p.sql_x("SELECT isSystemAgent from user where phid=%s", (userphid,), limit=1)
+    p.close()
+    if not isbot:
+        raise Exception("user is not a present")
+    if int(isbot[0][0]) > 0:
+        return True
+    return False
+
+def last_comment(phid):
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    com = "SELECT phid from maniphest_transaction where objectPHID=%s and transactionType='core:comment' ORDER BY dateCreated DESC"
+    _ = p.sql_x(com, (phid,), limit=1)
+    p.close()
+    if not _:
+        return ''
+    return _[0][0]
+
+def set_issue_status(taskphid, status):
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    p.sql_x("UPDATE maniphest_task SET status=%s WHERE phid=%s", (status, taskphid))
+    p.close()
+
+def set_comment_content(transxphid, content):
+    """set manual content for a comment
+    :param transxphid: str
+    :param userphid: str
+    """
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    p.sql_x("UPDATE maniphest_transaction_comment SET content=%s WHERE transactionPHID=%s", (content, transxphid))
+    p.close()
+    return
+
+def set_comment_time(transxphid, metatime):
+    """set manual epoch modtime for task
+    :param taskphid: str
+    :param mtime: int of modtime
+    """
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    p.sql_x("UPDATE maniphest_transaction SET dateModified=%s WHERE phid=%s", (metatime, transxphid))
+    p.sql_x("UPDATE maniphest_transaction SET dateCreated=%s WHERE phid=%s", (metatime, transxphid))
+    p.sql_x("UPDATE maniphest_transaction_comment SET dateModified=%s WHERE transactionPHID=%s", (metatime, transxphid))
+    p.sql_x("UPDATE maniphest_transaction_comment SET dateCreated=%s WHERE transactionPHID=%s", (metatime, transxphid))
+    p.close()
+    return
+
+def set_comment_author(transxphid, userphid):
+    """set manual owner for a comment
+    :param transxphid: str
+    :param userphid: str
+    """
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    p.sql_x("UPDATE maniphest_transaction SET authorPHID=%s WHERE phid=%s", (userphid, transxphid))
+    p.sql_x("UPDATE maniphest_transaction_comment SET authorPHID=%s WHERE transactionPHID=%s", (userphid, transxphid))
+    p.close()
+    return
 
 def set_task_mtime(taskphid, mtime):
     """set manual epoch modtime for task
@@ -161,7 +244,9 @@ def reference_ticket(reference):
     p = phdb(db='phabricator_maniphest', user=phmanifest_user, passwd=phmanifest_passwd)
     _ = p.sql_x("SELECT objectPHID FROM maniphest_customfieldstringindex WHERE indexValue = %s", reference)
     p.close()
-    return _[0] or ''
+    if not _:
+        return ''
+    return _[0]
 
 def email_by_userphid(userphid):
     """
@@ -242,6 +327,13 @@ def set_project_icon(project, icon='briefcase', color='blue'):
         people    = users
         truck     = releases
     """
+    if icon == 'tags':
+        color = 'yellow'
+    elif icon == 'people':
+        color = 'violet'
+    elif icon == 'truck':
+        color == 'orange'
+
     p = phdb(db='phabricator_project', user=phuser_user, passwd=phuser_passwd)
     _ = p.sql_x("UPDATE project SET icon=%s, color=%s WHERE name=%s", ('fa-' + icon, color, project))
     p.close()
@@ -252,6 +344,25 @@ def set_task_author(authorphid, id):
     _ = p.sql_x("UPDATE maniphest_task SET authorPHID=%s WHERE id=%s", (authorphid, id))
     p.close()
     return _
+
+def add_task_cc_by_ref(userphid, oldid):
+    refs = reference_ticket('bz%s' % (oldid,))
+    if not refs:
+        log('reference ticket not found for %s' % ('bz%s' % (oldid,),))
+        return
+    return add_task_cc(refs[0], userphid)
+
+def add_task_cc(ticketphid, userphid):
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    ccq = "SELECT ccPHIDs FROM maniphest_task WHERE phid = %s"
+    jcc_list = p.sql_x(ccq, ticketphid)[0]
+    cc_list = json.loads(jcc_list[0])
+    if userphid not in cc_list:
+        cc_list.append(userphid)
+    p.sql_x("UPDATE maniphest_task SET ccPHIDs=%s WHERE phid=%s", (json.dumps(cc_list), ticketphid))
+    final_jcclist = p.sql_x(ccq, ticketphid)[0]
+    p.close()
+    return json.loads(final_jcclist[0])
 
 
 class phdb:

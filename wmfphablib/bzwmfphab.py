@@ -1,6 +1,37 @@
 import re
 
 prepend = 'bz'
+security_mask = '_hidden_'
+
+def build_comment(c):
+    """ takes a native bz comment dict and outputs
+    a dict ready for processing into phab
+    """
+    clean_c = {}
+    clean_c['author'] =  c['author'].split('@')[0]
+    clean_c['creation_time'] = str(c['creation_time'])
+    clean_c['creation_time'] = int(float(c['creation_time']))
+    if c['author'] != c['creator']:
+        clean_c['creator'] =  c['creator'].split('@')[0]
+
+    clean_c['count'] = c['count']
+    if c['count'] == 0:
+        clean_c['bug_id'] = c['bug_id']
+
+    if c['is_private']:
+        c['text'] = security_mask
+
+    attachment = find_attachment_in_comment(c['text'])
+    if attachment:
+        fmt_text = []
+        text = c['text'].splitlines()
+        for t in text:
+            if not t.startswith('Created attachment'):
+                fmt_text.append(t)
+        c['text'] = '\n'.join(fmt_text)
+        clean_c['attachment'] = attachment
+    clean_c['text'] = c['text']
+    return clean_c
 
 def find_attachment_in_comment(text):
     a = re.search('Created\sattachment\s(\d+)', text)
