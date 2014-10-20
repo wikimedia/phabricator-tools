@@ -43,10 +43,14 @@ def create(bugid):
         elog('%s not present for migration' % (bugid,))
         return False
 
-    refexists = phabdb.reference_ticket('%s%s' % (bzlib.prepend, bugid))
-    if refexists:
+    def get_ref(id):
+        refexists = phabdb.reference_ticket('%s%s' % (bzlib.prepend, id))
+        if refexists:
+            return refexists
+
+    if get_ref(bugid):
         log('reference ticket %s already exists' % (bugid,))
-        return True
+        #return True
 
     buginfo = json.loads(buginfo)
     com = json.loads(com)
@@ -111,13 +115,15 @@ def create(bugid):
         log('Creating milestone: %s' % (buginfo['target_milestone'],))
         ptags.append((buginfo['target_milestone'], 'truck'))
 
+    #set defaults to be overridden by sec if needed
+    buginfo['viewPolicy'] = 'public'
+    buginfo['editPolicy'] = 'users'
+    buginfo["secstate"] = 'none'
     # This value must match the security enforcer extension
     # And the relevant herald rule must be in place.
-    if buginfo["product"] == 'Security':
+    if buginfo["product"].lower() == 'security':
         buginfo["secstate"] = 'security-bug'
-    else:
-        buginfo["secstate"] = 'none'
-    
+
     component_separator = '-'
     buginfo["product"] = buginfo["product"].replace('-', '_')
     buginfo["product"] = buginfo["product"].replace(' ', '_')
@@ -153,8 +159,25 @@ def create(bugid):
                                                                    description['text'])
     desc_tail = '--------------------------'
     desc_tail += "\n**URL**: %s" % (buginfo['url'].lower() or 'none')
+    desc_tail += "\n**Severity**: %s" % (buginfo['severity'].lower() or 'none')
     desc_tail += "\n**Version**: %s" % (buginfo['version'].lower())
-    desc_tail += "\n**See Also**: %s" % ('\n'.join(buginfo['see_also']).lower() or 'none')
+    desc_tail += "\n**Whiteboard**: %s" % (buginfo['whiteboard'].lower() or 'none')
+
+    #take see_also urls and transform for phab ref
+    from urlparse import urlparse
+    see_also = []
+    if buginfo['see_also']:
+        for sa in buginfo['see_also']:
+            parsed = urlparse(sa)
+            sabug = parsed.query.split('=')[1]
+            sabug_ref = get_ref(sabug)
+            if sabug_ref is None:
+                continue
+            else:
+                see_also.append(phabm.ticket_id_by_phid(sabug_ref[0]))
+
+    see_also = ' '.join(["T%s" % (s,) for s in see_also])
+    desc_tail += "\n**See Also**: %s" % (see_also or 'none')
 
     if 'alias' in buginfo:    
         desc_tail += "\n**Alias**: %s" % (buginfo['alias'])
@@ -197,7 +220,10 @@ def create(bugid):
                                  projectPHIDs=phids,
                                  ccPHIDs=ccphids,
                                  priority=buginfo['priority'],
-                                 auxiliary={"std:maniphest:external_reference":"bz%s" % (bugid,)})
+                                 viewPolicy = buginfo['viewPolicy'],
+                                 editPolicy = buginfo['editPolicy'],
+                                 auxiliary={"std:maniphest:external_reference":"bz%s" % (bugid,),
+                                            "std:maniphest:security_topic":"%s" % (buginfo["secstate"],)})
 
     log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
     phabdb.set_task_ctime(ticket['phid'], int(buginfo['creation_time'].split('.')[0]))
