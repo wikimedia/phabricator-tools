@@ -137,7 +137,7 @@ def main():
 
     if args.a:
         starting_epoch = phabdb.get_user_relations_last_finish(pmig)
-        users, finish_epoch = phabdb.get_verified_users(starting_epoch, config.fab_limit)
+        users, finish_epoch = phabdb.get_verified_users(starting_epoch, config.bz_updatelimit)
     elif args.email:
         users = phabdb.get_verified_user(args.email)
         starting_epoch = 0
@@ -182,7 +182,7 @@ def main():
 
 
     from multiprocessing import Pool
-    pool = Pool(processes=config.fab_multi)
+    pool = Pool(processes=int(config.bz_updatemulti))
     _ =  pool.map(run_update, histories)
     complete = len(filter(bool, _))
     failed = len(_) - complete

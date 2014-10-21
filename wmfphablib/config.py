@@ -34,6 +34,10 @@ parser_mode = 'bzmigrate'
 bzmigrate_db = parser.get(parser_mode, 'db')
 bzmigrate_user = parser.get(parser_mode, 'user')
 bzmigrate_passwd = parser.get(parser_mode, 'passwd')
+bz_createmulti = int(parser.get(parser_mode, 'create_multi'))
+bz_fetchmulti = int(parser.get(parser_mode, 'fetch_multi'))
+bz_updatelimit = int(parser.get(parser_mode, 'update_limit'))
+bz_updatemulti = int(parser.get(parser_mode, 'update_multi'))
 
 if __name__ == '__main__':
     print dbhost
@@ -54,3 +58,7 @@ if __name__ == '__main__':
     print bzmigrate_db
     print bzmigrate_user
     print bzmigrate_passwd
+    print bz_createmulti
+    print bz_fetchmulti
+    print bz_updatelimit
+    print bz_updatemulti

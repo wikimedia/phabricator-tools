@@ -277,7 +277,7 @@ def main():
 
     bugs = return_bug_list()
     from multiprocessing import Pool
-    pool = Pool(processes=10)
+    pool = Pool(processes=int(config.bz_createmulti))
     _ =  pool.map(run_create, bugs)
     complete = len(filter(bool, _))
     failed = len(_) - complete

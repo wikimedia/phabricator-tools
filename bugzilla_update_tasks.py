@@ -89,7 +89,7 @@ def run_update(bugid, tries=1):
 def main():
     bugs = return_bug_list()
     from multiprocessing import Pool
-    pool = Pool(processes=2)
+    pool = Pool(processes=int(config.bz_updatemulti))
     _ =  pool.map(run_update, bugs)
     complete = len(filter(bool, _))
     failed = len(_) - complete
