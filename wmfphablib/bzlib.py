@@ -3,6 +3,18 @@ import re
 prepend = 'bz'
 security_mask = '_hidden_'
 
+def sanitize_project_name(product, component):
+    component_separator = '-'
+    product = product.replace('-', '_')
+    product = product.replace(' ', '_')
+    component = component.replace('/', '_and_')
+    component = component.replace('-', '_')
+    component = component.replace(' ', '_')
+
+    return  "%s%s%s" % (product,
+                         component_separator,
+                         component)
+
 def build_comment(c):
     """ takes a native bz comment dict and outputs
     a dict ready for processing into phab
@@ -40,7 +52,7 @@ def find_attachment_in_comment(text):
     else:
         return ''
 
-def status_convert(bz_status):
+def status_convert(bz_status, bz_resolution):
     """
     UNCONFIRMED (default)   Open + Needs Triage (default)
     NEW     Open
@@ -69,7 +81,14 @@ def status_convert(bz_status):
                 'unconfirmed': 'open',
                 'patch_to_review': 'open'}
 
-    return statuses[bz_status.lower()]
+    if bz_resolution.lower() in ['wontfix', 'later', 'worksforme']:
+        return 'declined'
+    elif bz_resolution.lower() in ['invalid']:
+        return 'invalid'
+    elif bz_resolution.lower() in ['fixed']:
+        return 'resolved'
+    else:
+        return statuses[bz_status.lower()]
 
 def priority_convert(bz_priority):
     """
@@ -88,3 +107,20 @@ def priority_convert(bz_priority):
                   'low': 25,
                   'lowest': 10}
     return priorities[bz_priority.lower()]
+
+def see_also_transform():
+    #take see_also urls and transform for phab ref
+    from urlparse import urlparse
+    see_also = []
+    if buginfo['see_also']:
+        for sa in buginfo['see_also']:
+            parsed = urlparse(sa)
+            sabug = parsed.query.split('=')[1]
+            sabug_ref = get_ref(sabug)
+            if sabug_ref is None:
+                continue
+            else:
+                see_also.append(phabm.ticket_id_by_phid(sabug_ref[0]))
+
+    see_also = ' '.join(["T%s" % (s,) for s in see_also])
+    desc_tail += "\n**See Also**: %s" % (see_also or 'none')

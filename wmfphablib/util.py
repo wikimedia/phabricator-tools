@@ -1,3 +1,5 @@
+import itertools
+import re
 import os
 import sys
 import json
@@ -6,6 +8,45 @@ import config
 import time
 import datetime
 import syslog
+import phabdb
+import bzlib
+
+def bzbug_ref_translate(text):
+    mentioned_bugs = find_bug_refs(text)
+    phabrefs = {}
+    for b in mentioned_bugs:
+        bugint = re.search('\d+', b).group(0)
+        reft = phabdb.reference_ticket('%s%s' % (bzlib.prepend, bugint))
+        if reft:
+            phabrefs[b] = reft
+    refdict = {k: v[0] for k, v in phabrefs.iteritems() if v is not None}
+    taskid = lambda x: phabdb.get_task_id_by_phid(x)
+    newrefs = {k: "T%s" % (taskid(v),) for k, v in refdict.iteritems()}
+    return replace_bug_refs(text, newrefs)
+
+def replace_bug_refs(text, bug_translations):
+    # {u'Bug1': 'T6', u'Bug 100': 'T121'}
+    for bug, ticket in bug_translations.iteritems():
+        text = re.sub(bug , ticket, text, re.IGNORECASE)
+    return text
+
+def find_bug_refs(text):
+
+    # there are nicer ways to do this seemingly but
+    # all attempts resulted in an outlier so here it is
+    bug_matches = ['bug\d+',
+                   'bug\s+?\d+',
+                   'bug\s?\#\d+',
+                   'bug\s+\#\d+', 
+                   'bug\s+\#\s?\d+', 
+                   'bug\s+\#\s+\d+', 
+                   'bug\#\s?\d+',
+                   'bug\#\s+\d+',
+                   'bug\#\d+']
+    bugs = []
+    for regex in bug_matches:
+        bugs.append(re.findall(regex, text, re.IGNORECASE))
+    return list(itertools.chain.from_iterable(bugs))
 
 def datetime_to_epoch(date_time):
     return str((date_time - datetime.datetime(1970,1,1)).total_seconds())

@@ -7,6 +7,7 @@ import json
 import sys
 import xmlrpclib
 import os
+import re
 from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import return_bug_list
@@ -72,8 +73,8 @@ def create(bugid):
     mlists = bzdata_yaml['assigned_to_lists'].split(' ')
     vlog("Mailinglists: " + str(mlists))
 
-    #print server.Bug.attachments(kwargs)['bugs']
     attached = server.Bug.attachments(kwargs)['bugs'][str(bugid)]
+    vlog("bz attached items %s" % (str(attached)))
 
     #process ticket uploads to map attach id to phab file id
     uploads = {}
@@ -86,6 +87,7 @@ def create(bugid):
         a['objectName'] = upload['objectName']
         uploads[a['id']] = a
     log('%s attachment count: %s' % (bugid, str(len(uploads.keys()))))
+    vlog("phab upload details: %s" % (str(uploads)))
 
     #list of projects to add to ticket
     ptags = []
@@ -94,7 +96,7 @@ def create(bugid):
     buginfo['cc'] = [c.split('@')[0] for c in buginfo['cc']]
 
     # Convert bugzilla source to phabricator
-    buginfo['status'] = bzlib.status_convert(buginfo['status'])
+    buginfo['status'] = bzlib.status_convert(buginfo['status'], buginfo['resolution'])
     buginfo['priority'] = bzlib.priority_convert(buginfo['priority'])
 
     if '-d' in sys.argv:
@@ -108,8 +110,9 @@ def create(bugid):
         ptags.append(('verified', 'tags'))
 
     if buginfo['cf_browser'] not in ['---', "Other"]:
-        log('Adding browser tag: %s' % (buginfo['cf_browser'],))
-        ptags.append((buginfo['cf_browser'], 'tags'))
+        btag = "Browser_Support_%s" % (buginfo['cf_browser'].replace(' ', '-'),)
+        log('Adding browser tag: %s' % (btag,))
+        ptags.append((btag, 'tags'))
 
     if buginfo['target_milestone'] != '---':
         log('Creating milestone: %s' % (buginfo['target_milestone'],))
@@ -124,18 +127,8 @@ def create(bugid):
     if buginfo["product"].lower() == 'security':
         buginfo["secstate"] = 'security-bug'
 
-    component_separator = '-'
-    buginfo["product"] = buginfo["product"].replace('-', '_')
-    buginfo["product"] = buginfo["product"].replace(' ', '_')
-    buginfo["component"] = buginfo["component"].replace('/', '_and_')
-    buginfo["component"] = buginfo["component"].replace('-', '_')
-    buginfo["component"] = buginfo["component"].replace(' ', '_')
-
-    project = "%s%s%s" % (buginfo["product"],
-                         component_separator,
-                         buginfo["component"])
-
-    buginfo['project'] = project
+    buginfo['project'] = bzlib.sanitize_project_name(buginfo["product"],
+                                                     buginfo["component"])
     vlog(buginfo['project'])
     ptags.append((buginfo['project'], None))
 
@@ -156,28 +149,12 @@ def create(bugid):
 
     created = epoch_to_datetime(description['creation_time'])
     desc_block = "**Author:** `%s`\n\n**Description:**\n%s\n" % (description['author'],
-                                                                   description['text'])
+                                                                 description['text'])
     desc_tail = '--------------------------'
     desc_tail += "\n**URL**: %s" % (buginfo['url'].lower() or 'none')
     desc_tail += "\n**Severity**: %s" % (buginfo['severity'].lower() or 'none')
     desc_tail += "\n**Version**: %s" % (buginfo['version'].lower())
     desc_tail += "\n**Whiteboard**: %s" % (buginfo['whiteboard'].lower() or 'none')
-
-    #take see_also urls and transform for phab ref
-    from urlparse import urlparse
-    see_also = []
-    if buginfo['see_also']:
-        for sa in buginfo['see_also']:
-            parsed = urlparse(sa)
-            sabug = parsed.query.split('=')[1]
-            sabug_ref = get_ref(sabug)
-            if sabug_ref is None:
-                continue
-            else:
-                see_also.append(phabm.ticket_id_by_phid(sabug_ref[0]))
-
-    see_also = ' '.join(["T%s" % (s,) for s in see_also])
-    desc_tail += "\n**See Also**: %s" % (see_also or 'none')
 
     if 'alias' in buginfo:    
         desc_tail += "\n**Alias**: %s" % (buginfo['alias'])
@@ -189,6 +166,13 @@ def create(bugid):
         desc_tail += "\n**Hardware/OS**: %s/%s" % (buginfo["rep_platform"], buginfo['op_sys'])
     else:
         desc_tail += "\n**Hardware/OS**: %s/%s" % ('unknown', 'unknown')
+
+    desc_tail += "\n**See Also**: %s" % ('\n'.join(buginfo['see_also']).lower() or 'none')
+    if 'attachment' in description:
+            attached = int(description['attachment'])
+            if attached in uploads:
+                cattached = uploads[int(description['attachment'])]
+                desc_tail += "\n\n**Attached**: {%s}" % (cattached['objectName'])
 
     full_description = desc_block + '\n' + desc_tail
 

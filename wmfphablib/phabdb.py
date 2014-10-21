@@ -222,6 +222,13 @@ def get_blocking_tasks(taskphid):
         return ''
     return _
 
+def get_task_id_by_phid(taskphid):
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    _ = p.sql_x("SELECT id from maniphest_task where phid=%s;",  (taskphid,), limit=None)
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
 def get_user_relations():
     fabdb = phabdb.phdb(db='fab_migration')
     hq = "SELECT assigned, cc, author, created, modified FROM user_relations WHERE user = %s"
@@ -397,8 +404,15 @@ def add_task_cc(ticketphid, userphid):
         cc_list.append(userphid)
     p.sql_x("UPDATE maniphest_task SET ccPHIDs=%s WHERE phid=%s", (json.dumps(cc_list), ticketphid))
     final_jcclist = p.sql_x(ccq, ticketphid)[0]
+    set_task_subscriber(ticketphid, userphid)
     p.close()
     return json.loads(final_jcclist[0])
+
+def set_task_subscriber(taskphid, userphid):
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+    p.sql_x("INSERT INTO maniphest_tasksubscriber (taskPHID, subscriberPHID) VALUES (%s, %s)",
+            (taskphid, userphid))
+    p.close()
 
 
 class phdb:

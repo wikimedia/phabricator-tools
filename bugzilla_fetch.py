@@ -50,12 +50,12 @@ def fetch(bugid):
         c['time'] = datetime_to_epoch(c['time'])
 
     # set ticket status for priority import
-    status = bzlib.status_convert(buginfo['status'])
+    status = bzlib.status_convert(buginfo['status'], buginfo['resolution'])
 
-    if status != 'open':
-        creation_priority = ipriority['na']
-    else:
+    if status == 'open':
         creation_priority = ipriority['unresolved']
+    else:
+        creation_priority = ipriority['na']
 
     current = pmig.sql_x("SELECT * from bugzilla_meta where id = %s", bugid)
     if current:
