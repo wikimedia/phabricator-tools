@@ -1,37 +1,43 @@
 [general]
 dbhost = localhost
+file_upload_timeout = 120
 
 [phmanifest]
 user = root
 passwd = labspass
 
 [phuser]
-user = phuser
+user = root
 passwd = labspass
 
 [fabmigrate]
 db = fab_migration
 user = fabmigrate
-passwd = labspass
-limit = 1
-multi = 1
+passwd = ''
+multi = 10
+limit = 30
 
 [phab]
-certificate = asdf
-host = https://phabricator.wikimedia.org/api/
-username = flimport
+host = https://bugzilla.wmflabs.org/api/
+certificate = ''
+username = mybot
 
 [oldfab]
 cert = asdf
-host = http://fabapi.wmflabs.org/api/
-user = admin
+host = ''
+user = ''
 
 [bz]
-url = ''
-Bugzilla_login = ''
-Bugzilla_password = ''
+url = https://bugzilla.wikimedia.org/xmlrpc.cgi
+Bugzilla_login = foo@foo.com
+Bugzilla_password = bar
 
 [bzmigrate]
-db = ''
-user = ''
-passwd = ''
+db = bugzilla_migration
+user = root
+passwd = labspass
+fetch_multi = 40
+create_multi = 3
+update_limit = 30
+update_multi = 10
+security = false

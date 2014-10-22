@@ -10,6 +10,7 @@ import ConfigParser
 parser = ConfigParser.SafeConfigParser()
 parser.read(cfile)
 dbhost = parser.get('general', 'dbhost')
+file_upload_timeout = int(parser.get('general', 'file_upload_timeout'))
 parser_mode = 'phmanifest'
 phmanifest_user = parser.get(parser_mode, 'user')
 phmanifest_passwd = parser.get(parser_mode, 'passwd')
@@ -38,9 +39,11 @@ bz_createmulti = int(parser.get(parser_mode, 'create_multi'))
 bz_fetchmulti = int(parser.get(parser_mode, 'fetch_multi'))
 bz_updatelimit = int(parser.get(parser_mode, 'update_limit'))
 bz_updatemulti = int(parser.get(parser_mode, 'update_multi'))
+bz_security = parser.get(parser_mode, 'security')
 
 if __name__ == '__main__':
     print dbhost
+    print file_upload_timeout
     print phmanifest_user
     print phmanifest_passwd
     print phuser_user
@@ -62,3 +65,4 @@ if __name__ == '__main__':
     print bz_fetchmulti
     print bz_updatelimit
     print bz_updatemulti
+    print bz_security

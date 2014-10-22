@@ -12,11 +12,13 @@ from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import return_bug_list
 from wmfphablib import phdb
+from wmfphablib import now
 from wmfphablib import mailinglist_phid
 from wmfphablib import set_project_icon
 from wmfphablib import phabdb
 from wmfphablib import Phab
 from wmfphablib import log
+from wmfphablib import notice
 from wmfphablib import vlog
 from wmfphablib import errorlog as elog
 from wmfphablib import bzlib
@@ -28,7 +30,6 @@ from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
 
 def create(bugid):
-
     phab = Phabricator(config.phab_user,
                        config.phab_cert,
                        config.phab_host)
@@ -37,6 +38,7 @@ def create(bugid):
     phabm.con = phab
 
     pmig = phdb(db=config.bzmigrate_db)
+
     current = pmig.sql_x("SELECT priority, header, comments, created, modified FROM bugzilla_meta WHERE id = %s", (bugid,))
     if current:
         import_priority, buginfo, com, created, modified = current[0]
@@ -51,13 +53,24 @@ def create(bugid):
 
     if get_ref(bugid):
         log('reference ticket %s already exists' % (bugid,))
-        #return True
+        return True
 
     buginfo = json.loads(buginfo)
     com = json.loads(com)
     bugid = int(bugid)
     vlog(bugid)
     vlog(buginfo)
+
+    buginfo["secstate"] = 'none'
+    # And the relevant herald rule must be in place.
+    if buginfo["product"].lower() == 'security':
+        buginfo["secstate"] = 'security-bug'
+        log("found security-bug issue %s" % (bugid,))
+
+        #this allows testing while respecting security queue
+        if config.bz_security.lower() != 'true':
+            log("ignoring security issue %s" % (bugid,))
+            return True
 
     server = xmlrpclib.ServerProxy(config.Bugzilla_url, use_datetime=True)
     token_data = server.User.login({'login': config.Bugzilla_login,
@@ -81,7 +94,8 @@ def create(bugid):
     for a in attached:
         if a['is_private']:
             continue
-        upload = phabm.upload_file(a['file_name'], str(a['data']))
+        vlog("processing bz attachment %s" % (str(a)))
+        upload = phabm.upload_file(a['file_name'], a['data'].data)
         a['phid'] = upload['phid']
         a['name'] = upload['name']
         a['objectName'] = upload['objectName']
@@ -121,12 +135,6 @@ def create(bugid):
     #set defaults to be overridden by sec if needed
     buginfo['viewPolicy'] = 'public'
     buginfo['editPolicy'] = 'users'
-    buginfo["secstate"] = 'none'
-    # This value must match the security enforcer extension
-    # And the relevant herald rule must be in place.
-    if buginfo["product"].lower() == 'security':
-        buginfo["secstate"] = 'security-bug'
-
     buginfo['project'] = bzlib.sanitize_project_name(buginfo["product"],
                                                      buginfo["component"])
     vlog(buginfo['project'])
@@ -167,7 +175,7 @@ def create(bugid):
     else:
         desc_tail += "\n**Hardware/OS**: %s/%s" % ('unknown', 'unknown')
 
-    desc_tail += "\n**See Also**: %s" % ('\n'.join(buginfo['see_also']).lower() or 'none')
+    desc_tail += "\n**See Also**:\n%s" % ('\n'.join(buginfo['see_also']).lower() or 'none')
     if 'attachment' in description:
             attached = int(description['attachment'])
             if attached in uploads:
@@ -179,6 +187,8 @@ def create(bugid):
     keys = buginfo['keywords']
     for k in keys:
         if k in tag_keys:
+            if k == 'ops':
+                k = 'operations'
             ptags.append((k, 'tags'))
 
     phids = []
@@ -243,6 +253,8 @@ def create(bugid):
     phabdb.set_task_mtime(ticket['phid'], int(buginfo['last_change_time'].split('.')[0]))
     xcomments = json.dumps(fmt_comments)
     pmig.sql_x("UPDATE bugzilla_meta SET xcomments=%s WHERE id = %s", (xcomments, bugid))
+    pmig.sql_x("UPDATE bugzilla_meta SET priority=%s, modified=%s WHERE id = %s",
+               (ipriority['creation_success'], now(), bugid))
     pmig.close()
     return True
 
@@ -275,7 +287,16 @@ def main():
         elog('%s reference field not editable on this install' % (bugid,))
         sys.exit(1)
 
-    bugs = return_bug_list()
+    pmig = phdb(db=config.bzmigrate_db)
+    bugs = return_bug_list(dbcon=pmig)
+    pmig.close()
+
+    #Serious business
+    if 'failed' in sys.argv:
+        for b in bugs:
+            notice("Removing bugid %s" % (b,))
+            log(util.remove_issue_by_bugid(b, bzlib.prepend))
+
     from multiprocessing import Pool
     pool = Pool(processes=int(config.bz_createmulti))
     _ =  pool.map(run_create, bugs)

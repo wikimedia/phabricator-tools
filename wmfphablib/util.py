@@ -11,6 +11,9 @@ import syslog
 import phabdb
 import bzlib
 
+def tflatten(t_of_tuples):
+    return [element for tupl in t_of_tuples for element in tupl]
+
 def bzbug_ref_translate(text):
     mentioned_bugs = find_bug_refs(text)
     phabrefs = {}
@@ -72,6 +75,11 @@ def log(msg):
         except:
             print 'error logging output'
 
+def notice(msg):
+    msg = unicode(msg)
+    print "NOTICE: ", msg
+    log(msg)
+
 def vlog(msg):
     msg = unicode(msg)
     if '-vv' in ''.join(sys.argv):
@@ -118,3 +126,53 @@ def get_index(seq, attr, value):
 
 def purge_cache():
     return runBash('/srv/phab/phabricator/bin/cache purge --purge-remarkup')
+
+def destroy_issue(id):
+    return runBash('/srv/phab/phabricator/bin/remove destroy T%s --no-ansi --force' % (id,))
+
+def remove_issue_by_bugid(bugid, ref):
+    log("Removing issue by reference %s%s" % (ref, bugid))
+    taskphid = phabdb.reference_ticket("%s%s" % (ref, bugid))
+    log("Removing issue by taskphid %s" % (taskphid,))
+    if len(taskphid) < 1:
+        return 'no task phid found to remove'
+    issueid = phabdb.get_task_id_by_phid(taskphid[0])
+    notice("!Removing issue T%s!" % (issueid,))
+    out = ''
+    out += destroy_issue(issueid)
+    out += phabdb.remove_reference("%s%s" % (ref, bugid))
+    out += phabdb.reference_ticket("%s%s" % (ref, bugid))
+    return out
+
+def return_bug_list(dbcon=None):
+
+    if sys.stdin.isatty():
+        bugs = sys.argv[1:]
+    else:
+        bugs = sys.stdin.read().strip('\n').strip().split()
+
+    if 'failed' in ''.join(sys.argv):
+        if dbcon == None:
+            print "cant find dbcon for priority buglist"
+            return []
+        bugs = phabdb.get_failed_creations(dbcon)
+    elif '-' in bugs[0]:
+        start, stop = bugs[0].split('-')
+
+        bugrange = range(int(start), int(stop) + 1)
+        bugs = [int(b) for b in bugrange]
+
+        for arg in sys.argv:
+            if arg.startswith('x'):
+                sample = int(arg.strip('x'))
+                vlog("sample rate found %s" % (sample,))
+                bugs = [b for b in bugs if int(b) % sample == 0]
+    else:
+        bugs = [int(i) for i in bugs if i.isdigit()]
+
+    if not isinstance(bugs, list):
+        print "Bug list not built"
+        return
+
+    log("Bugs count: %d" % (len(bugs)))
+    return bugs

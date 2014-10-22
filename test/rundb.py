@@ -2,6 +2,9 @@ import os, sys
 path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('/'.join(path.split('/')[:-1]))
 from wmfphablib import phabdb
+from wmfphablib import util
+print util.remove_issue_by_bugid(sys.argv[1], 'bz')
+exit()
 
 email_tuples =  phabdb.get_verified_emails()
 flat_list =  [e[1] for e in email_tuples]

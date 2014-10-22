@@ -6,7 +6,9 @@ import bzlib
 import rtlib
 import fablib
 import time
+from util import return_bug_list
 from util import log
+from util import notice
 from util import vlog
 from util import errorlog
 from util import datetime_to_epoch
@@ -31,28 +33,6 @@ ipriority = {'creation_failed': 6,
              'update_success': 8,
              'update_failed': 9,
              'unresolved': 1}
-
-def return_bug_list():
-    if sys.stdin.isatty():
-        bugs = sys.argv[1:]
-    else:
-        bugs = sys.stdin.read().strip('\n').strip().split()
-
-    if '-' in bugs[0]:
-        start, stop = bugs[0].split('-')
-
-        bugrange = range(int(start), int(stop) + 1)
-        bugs = [int(b) for b in bugrange]
-
-        for arg in sys.argv:
-            if arg.startswith('x'):
-                sample = int(arg.strip('x'))
-                vlog("sample rate found %s" % (sample,))
-                bugs = [b for b in bugs if int(b) % sample == 0]
-    else:
-        bugs = [int(i) for i in bugs if i.isdigit()]
-    log("Bugs count: %d" % (len(bugs)))
-    return bugs
 
 def save_attachment(name, data):
     f = open(name, 'wb')

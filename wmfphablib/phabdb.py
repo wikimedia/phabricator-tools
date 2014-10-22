@@ -5,6 +5,7 @@ import MySQLdb
 import traceback
 import syslog
 import time
+import util
 from config import dbhost
 from config import phmanifest_user
 from config import phmanifest_passwd
@@ -21,6 +22,14 @@ def get_user_relations_last_finish(dbcon):
         return int(fin[0][0])
     except:
         return 1
+
+def get_failed_creations(dbcon):
+    _ = dbcon.sql_x("SELECT id from bugzilla_meta where priority=%s", (6,), limit=None)
+    if _ is None:
+        return
+    f_ = list(util.tflatten(_))
+    if f_:
+        return f_
 
 def user_relations_start(pid, source, start, status, start_epoch, user_count, issue_count, dbcon):
     insert_values = (pid, source, start, status, start_epoch, user_count, issue_count, int(time.time()))
@@ -79,6 +88,13 @@ def get_user_migration_comment_history(user, dbcon):
     if saved_history is None:
         return ()
     return saved_history[0]
+
+def get_file_id_by_phid(ticketphid):
+    p = phdb(db='phabricator_file', user=phuser_user, passwd=phuser_passwd)
+    _ = p.sql_x("SELECT id from file where phid=%s", (ticketphid), limit=1)
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
 
 def get_bot_blog(botname):
     p = phdb(db='phabricator_phame', user=phuser_user, passwd=phuser_passwd)
@@ -281,6 +297,27 @@ def reference_ticket(reference):
     """
     p = phdb(db='phabricator_maniphest', user=phmanifest_user, passwd=phmanifest_passwd)
     _ = p.sql_x("SELECT objectPHID FROM maniphest_customfieldstringindex WHERE indexValue = %s", reference)
+    p.close()
+    if not _:
+        return ''
+    return _[0]
+
+def reference_ticket(reference):
+    """ Find the new phab ticket id for a reference id
+    :param reference: str ref id
+    :returns: str of phid
+    """
+    p = phdb(db='phabricator_maniphest', user=phmanifest_user, passwd=phmanifest_passwd)
+    _ = p.sql_x("SELECT objectPHID FROM maniphest_customfieldstringindex WHERE indexValue = %s", reference)
+    p.close()
+    if not _:
+        return ''
+    return _[0]
+
+
+def remove_reference(refname):
+    p = phdb(db='phabricator_maniphest', user=phmanifest_user, passwd=phmanifest_passwd)
+    _ = p.sql_x("DELETE from maniphest_customfieldstringindex where indexValue=%s", (refname,))
     p.close()
     if not _:
         return ''

@@ -1,10 +1,11 @@
 import base64
+import config
 import phabricator
 from phabricator import Phabricator
 import phabdb
-from . import log
-from . import vlog
-from . import errorlog as elog
+from util import log
+from util import vlog
+from util import errorlog as elog
 
 class phabapi:
 
@@ -95,9 +96,19 @@ class phabapi:
         return phid
 
     def upload_file(self, name, data):
+        out = {}
+        self.con.timeout = config.file_upload_timeout
         encoded = base64.b64encode(data)
-        upload = self.con.file.upload(name=name, data_base64=encoded)
-        return self.con.file.info(phid=upload.response).response
+        uploadphid = self.con.file.upload(name=name, data_base64=encoded)
+        out['phid'] = uploadphid
+        log("%s upload response: %s" % (name, uploadphid.response))
+        fileid = phabdb.get_file_id_by_phid(uploadphid.response)
+        out['id'] = int(fileid)
+        out['name'] = name
+        out['objectName'] = "F%s" % (fileid,)
+        log("Created file id: %s" % (fileid,))
+        self.con.timeout = 5
+        return out
 
     def ticket_id_by_phid(self, phid):
          tinfo = self.con.maniphest.query(phids=[phid])
