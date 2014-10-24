@@ -134,7 +134,7 @@ def main():
                        passwd=config.bzmigrate_passwd)
 
     if args.a:
-        starting_epoch = phabdb.get_user_relations_last_finish(pmig)
+        starting_epoch = phabdb.get_user_relations_comments_last_finish(pmig)
         users, finish_epoch = phabdb.get_verified_users(starting_epoch, config.bz_updatelimit)
     elif args.email:
         users = phabdb.get_verified_user(args.email)
