@@ -431,11 +431,9 @@ def add_task_cc(ticketphid, userphid):
     p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
     ccq = "SELECT ccPHIDs FROM maniphest_task WHERE phid = %s"
     jcc_list = p.sql_x(ccq, ticketphid)
-    #XXXX: TESTING
-    #HAD TO PURGE SECURITY TICKETS FOR IGNORE NONE RETURN FOR TESTING ONLY
     if jcc_list is None:
+        util.notice("!Ignoring CC for user %s on issue %s" % (userphid, ticketphid))
         return
-    #####
     cc_list = json.loads(jcc_list[0][0])
     if userphid not in cc_list:
         cc_list.append(userphid)
@@ -447,8 +445,11 @@ def add_task_cc(ticketphid, userphid):
 
 def set_task_subscriber(taskphid, userphid):
     p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
-    p.sql_x("INSERT INTO maniphest_tasksubscriber (taskPHID, subscriberPHID) VALUES (%s, %s)",
-            (taskphid, userphid))
+    existing_query = "SELECT taskPHID, subscriberPHID from maniphest_tasksubscriber where taskPHID=%s and subscriberPHID=%s"
+    existing = p.sql_x(existing_query, (taskphid, userphid))
+    if existing is None:
+        p.sql_x("INSERT INTO maniphest_tasksubscriber (taskPHID, subscriberPHID) VALUES (%s, %s)",
+                (taskphid, userphid))
     p.close()
 
 
