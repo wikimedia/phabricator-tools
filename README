@@ -1,3 +1,16 @@
+These tools are all oriented towards migration of external data sources to phab.
+
+Preflight check for migrations:
+
+    set up security group
+    set up security herald rule
+    make sure mailing lists are in place
+    make sure ext ref key is editable
+    make sure bot is in security group
+    ensure mysql file size
+    bot creation
+    update /etc/phabtools
+
 IMPORTANT:
 
     * bot user must be a member of importbots group
@@ -78,20 +91,19 @@ CREATE TABLE user_relations_comments
 );
 
 
-create table user_relations_job
-(
-			id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-			pid INT(12),
-			start INT(12),
-			finish INT(12),
-			status INT,
-			start_epoch INT(12),
-			finish_epoch INT(12),
-			user_count INT,
-			issue_count INT,
-			completed INT,
-			failed INT,
-			modified INT(12)
+create table user_relations_jobs (id INT AUTO_INCREMENT PRIMARY KEY,
+			          pid INT(12),
+                                  source TEXT(30),
+			          start INT(12),
+			          finish INT(12),
+			          status INT,
+			          start_epoch INT(12),
+			          finish_epoch INT(12),
+			          user_count INT,
+			          issue_count INT,
+			          completed INT,
+			          failed INT,
+			          modified INT(12)
 );
 
 create table task_relations (id INT, priority INT, blocks TEXT(1000), modified INT(12));
