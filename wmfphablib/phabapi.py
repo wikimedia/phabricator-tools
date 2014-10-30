@@ -95,7 +95,14 @@ class phabapi:
             log(project_name + ' exists')
         return phid
 
-    def upload_file(self, name, data):
+    def upload_file(self, name, data, dump=False):
+        print "name", name
+        print len(data)
+
+        if dump:
+            with open(name, 'wb') as f:
+                f.write(data)
+
         out = {}
         self.con.timeout = config.file_upload_timeout
         encoded = base64.b64encode(data)

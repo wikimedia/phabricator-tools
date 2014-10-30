@@ -7,31 +7,32 @@ import ConfigParser
 import json
 sys.path.append('/home/rush/python-rtkit/')
 from wmfphablib import phdb
+from wmfphablib import rtlib
 from wmfphablib import log
 from rtkit import resource
 from rtkit import authenticators
 from rtkit import errors
 from wmfphablib import ipriority
-from wmfphablib import get_config_file
 from wmfphablib import now
-import ConfigParser
-
-configfile = get_config_file()
+from wmfphablib import config
 
 
 def fetch(tid):
 
-    parser = ConfigParser.SafeConfigParser()
-    parser_mode = 'rt'
-    parser.read(configfile)
-    response = resource.RTResource(parser.get(parser_mode, 'url'),
-                               parser.get(parser_mode, 'username'),
-                               parser.get(parser_mode, 'password'),
-                               authenticators.CookieAuthenticator)
-
+    response = resource.RTResource(config.rt_url,
+                                   config.rt_login,
+                                   config.rt_passwd,
+                                   authenticators.CookieAuthenticator)
+  
     tinfo = response.get(path="ticket/%s" % (tid,))
+    #log(tinfo)
+
+
     #attachments = response.get(path="ticket/%s/attachments/" % (tid,))
     history = response.get(path="ticket/%s/history?format=l" % (tid,))
+
+    links = response.get(path="ticket/%s/links/show" % (tid,))
+    link_dict = rtlib.links_to_dict(links)
 
     #we get back freeform text and create a dict
     dtinfo = {}
@@ -45,7 +46,7 @@ def fetch(tid):
         if len(cv_kv) > 1:
             k = cv_kv[0]
             v = cv_kv[1]
-        dtinfo[k.strip()] = v.strip()
+            dtinfo[k.strip()] = v.strip()
 
     #breaking detailed history into posts
     #23/23 (id/114376/total)
@@ -85,7 +86,8 @@ def fetch(tid):
     else:
         creation_priority = ipriority['unresolved']
 
-    print 'info', dtinfo
+    dtinfo['links'] = link_dict
+    print dtinfo
     com = json.dumps(comments)
     tinfo = json.dumps(dtinfo)
     pmig = phdb(db='rt_migration')

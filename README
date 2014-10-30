@@ -34,13 +34,17 @@ python-mysqldb
 
 Notes on DB Schema for migration:
 
+create database bugzilla_migration;
+create database rt_migration;
+create database fab_migration;
+
 use bugzilla_migration;
 CREATE TABLE bugzilla_meta (
                              id INT,
                              priority INT,
                              header TEXT(10000),
                              comments TEXT(100000), 
-                             xcomments TEXT(100000), 
+                             xcomments TEXT(100000),
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
                             );
@@ -51,14 +55,12 @@ CREATE TABLE rt_meta (
                              priority INT,
                              header TEXT(10000),
                              comments TEXT(100000), 
+                             xcomments TEXT(100000),
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
                             );
 
-------------------------------------------------
-
-CREATE DATABASE fab_migration;
-
+use fab_meta;
 CREATE TABLE fab_meta (
                              id INT,
                              priority INT,
@@ -67,6 +69,8 @@ CREATE TABLE fab_meta (
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
                             );
+
+------------------------------------------------
 
 CREATE TABLE user_relations
 (

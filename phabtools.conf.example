@@ -41,3 +41,17 @@ create_multi = 3
 update_limit = 30
 update_multi = 10
 security = false
+
+[rtmigrate]
+db = rt_migration
+user = root
+passwd = labspass
+fetch_multi = 40
+create_multi = 3
+update_limit = 30
+update_multi = 10
+
+[rt]
+url = https://rt.wikimedia.org/REST/1.0/
+login = ''
+passwd = ''

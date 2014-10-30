@@ -40,21 +40,38 @@ bz_fetchmulti = int(parser.get(parser_mode, 'fetch_multi'))
 bz_updatelimit = int(parser.get(parser_mode, 'update_limit'))
 bz_updatemulti = int(parser.get(parser_mode, 'update_multi'))
 bz_security = parser.get(parser_mode, 'security')
+parser_mode = 'rtmigrate'
+rtmigrate_db = parser.get(parser_mode, 'db')
+rtmigrate_user = parser.get(parser_mode, 'user')
+rtmigrate_passwd = parser.get(parser_mode, 'passwd')
+rt_createmulti = int(parser.get(parser_mode, 'create_multi'))
+rt_fetchmulti = int(parser.get(parser_mode, 'fetch_multi'))
+rt_updatelimit = int(parser.get(parser_mode, 'update_limit'))
+rt_updatemulti = int(parser.get(parser_mode, 'update_multi'))
+parser_mode = 'rt'
+rt_url = parser.get(parser_mode, 'url')
+rt_login = parser.get(parser_mode, 'login')
+rt_passwd = parser.get(parser_mode, 'passwd')
+
 
 if __name__ == '__main__':
+    print 'GENERAL \n'
     print dbhost
     print file_upload_timeout
+    print phab_user
+    print phab_cert
+    print phab_host
+    print 'PHAB \n'
     print phmanifest_user
     print phmanifest_passwd
     print phuser_user
     print phuser_passwd
+    print 'FL \n'
     print fabmigrate_db
     print fabmigrate_user
     print fabmigrate_passwd
     print fab_multi
-    print phab_user
-    print phab_cert
-    print phab_host
+    print 'BZ \n'
     print Bugzilla_url
     print Bugzilla_login
     print Bugzilla_password
@@ -66,3 +83,15 @@ if __name__ == '__main__':
     print bz_updatelimit
     print bz_updatemulti
     print bz_security
+    print 'RT\n'
+    print rtmigrate_db
+    print rtmigrate_user
+    print rtmigrate_passwd
+    print rt_createmulti
+    print rt_fetchmulti
+    print rt_updatelimit
+    print rt_updatemulti
+    print rt_url
+    print rt_login
+    print rt_passwd
+

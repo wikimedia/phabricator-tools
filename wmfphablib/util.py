@@ -11,6 +11,7 @@ import syslog
 import phabdb
 import bzlib
 
+
 def tflatten(t_of_tuples):
     return [element for tupl in t_of_tuples for element in tupl]
 

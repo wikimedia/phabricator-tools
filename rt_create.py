@@ -4,15 +4,18 @@ import os
 import re
 import sys
 import getpass
-import logging
-import ConfigParser
 sys.path.append('/home/rush/python-rtkit/')
+from phabricator import Phabricator
+from wmfphablib import Phab as phabmacros
+from wmfphablib import return_bug_list
 from wmfphablib import phdb
+from wmfphablib import phabdb
 from wmfphablib import mailinglist_phid
 from wmfphablib import set_project_icon
-from wmfphablib import phabdb
-from wmfphablib import Phab
 from wmfphablib import log
+from wmfphablib import rtlib
+from wmfphablib import vlog
+from wmfphablib import config
 from wmfphablib import rtlib
 from wmfphablib import datetime_to_epoch
 from wmfphablib import epoch_to_datetime
@@ -21,26 +24,39 @@ from rtkit import resource
 from rtkit import authenticators
 from rtkit import errors
 from wmfphablib import ipriority
-from wmfphablib import get_config_file
-
-configfile = get_config_file()
 
 
 def create(rtid):
-    parser = ConfigParser.SafeConfigParser()
-    parser.read(configfile)
 
-    parser_mode = 'phab'
-    phab = Phab(user=parser.get(parser_mode, 'username'),
-                cert=parser.get(parser_mode, 'certificate'),
-                host=parser.get(parser_mode, 'host'))
+    phab = Phabricator(config.phab_user,
+                       config.phab_cert,
+                       config.phab_host)
 
+    phabm = phabmacros('', '', '')
+    phabm.con = phab
 
-    parser_mode = 'rt'
-    response = resource.RTResource(parser.get(parser_mode, 'url'),
-                               parser.get(parser_mode, 'username'),
-                               parser.get(parser_mode, 'password'),
-                               authenticators.CookieAuthenticator)
+    pmig = phdb(db=config.rtmigrate_db)
+
+    response = resource.RTResource(config.rt_url,
+                                   config.rt_login,
+                                   config.rt_passwd,
+                                   authenticators.CookieAuthenticator)
+
+    current = pmig.sql_x("SELECT priority, header, comments, created, modified FROM rt_meta WHERE id = %s", (rtid,))
+    if current:
+        import_priority, rtinfo, com, created, modified = current[0]
+    else:
+        elog('%s not present for migration' % (rtid,))
+        return False
+
+    def get_ref(id):
+        refexists = phabdb.reference_ticket('%s%s' % (rtlib.prepend, id))
+        if refexists:
+            return refexists
+
+    if get_ref(rtid):
+        log('reference ticket %s already exists' % (rtid,))
+        #return True
 
     #Ex:
     #id: ticket/8175/attachments\n
@@ -54,12 +70,10 @@ def create(rtid):
     #/#TMP
     history = response.get(path="ticket/%s/history?format=l" % (rtid,))
 
-    pmig = phdb(db='rt_migration')
-    rrtid, import_priority, rtinfo, com, created, modified = pmig.sql_x("SELECT * FROM rt_meta WHERE id = %s",
-                                                                        (rtid,))
-    pmig.close()
     rtinfo = json.loads(rtinfo)
     comments = json.loads(com)
+    vlog(rtid)
+    vlog(rtinfo)
 
     comment_dict = {}
     for i, c in enumerate(comments):
@@ -89,7 +103,7 @@ def create(rtid):
               'description': 'Description:(.*)',
               'created': 'Created:(.*)',
               'ovalue': 'OldValue:(.*)',
-              'nvalue': 'NewValue::(.*)'}
+              'nvalue': 'NewValue:(.*)'}
 
     for k, v in comment_dict.iteritems():
         text_body = v['text_body']
@@ -199,7 +213,7 @@ def create(rtid):
         #u'objectName': u'F25786', u'byteSize': u'120305',
         #u'uri': u'http://fabapitest.wmflabs.org/file/data/t7j2qp7l5z4ou5qpbx2u/PHID-FILE-ioj2mrujudkrekhl5pkl/0jp9B09.jpg',
         #u'dateCreated': u'1409345752', u'dateModified': u'1409345752', u'id': u'25786'}
-        upload = phab.upload_file("%s.%s" % (v[0], file_extension), sanscontent)
+        upload = phabm.upload_file("%s.%s" % (v[0], file_extension), sanscontent)
         uploaded[k] = upload
 
     ptags = []
@@ -207,36 +221,38 @@ def create(rtid):
 
     phids = []
     for p in ptags:
-        phids.append(phab.ensure_project(p))
+        phids.append(phabm.ensure_project(p))
 
     def priority_convert(priority):
         priorities = { '0': 50, '50': 50}
         return priorities.get(priority.lower(), 50)
 
     def status_convert(status):
-        statuses = { 'resolved': 'resolved', 'new': 'open'}
+        statuses = { 'resolved': 'resolved',
+                     'new': 'open',
+                     'open': 'open',
+                     'stalled': 'needs_info'}
         return statuses[status.lower()]
 
-    priority = priority_convert(rtinfo['Priority'])
-    status = status_convert(rtinfo['Status'])
+    rtinfo['xpriority'] = priority_convert(rtinfo['Priority'])
+    rtinfo['xstatus'] = status_convert(rtinfo['Status'])
 
-    desc_block = "**Created**: `%s`\n\n**Author:** `%s`\n\n**Description:**\n%s\n" % (rtinfo['Created'],
-                                                                                      rtinfo['Creator'],
-                                                                                      rtinfo['Subject'])
+    full_description = "**Author:** `%s`\n\n**Description:**\n%s\n" % (rtinfo['Creator'],
+                                                                       rtinfo['Subject'])
 
-    desc_tail = '--------------------------'
-    desc_tail += "\n**Last Updated**: %s" % (rtinfo['LastUpdated'])
+    vlog("Ticket Info: %s" % (full_description,))
+    ticket =  phab.maniphest.createtask(title=rtinfo['Subject'],
+                                        description=full_description,
+                                        projectPHIDs=phids,
+                                        ccPHIDs=[],
+                                        priority=rtinfo['xpriority'],
+                                        viewPolicy = 'public',
+                                        editPolicy = 'public',
+                                        auxiliary={"std:maniphest:external_reference":"rt%s" % (rtid,),
+                                                   "std:maniphest:security_topic":"%s" % ('none')})
 
-    full_description = desc_block + '\n' + desc_tail
-    log("Ticket Info: %s" % (desc_block,))
-    ticket = phab.task_create(rtinfo['Subject'],
-                    full_description,
-                    'rt%s' % sys.argv[1],
-                    priority,
-                    'none',
-                    ccPHIDs=[],
-                    projects=phids)
-
+    log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
+    phabdb.set_task_ctime(ticket['phid'], rtlib.str_to_epoch(rtinfo['Created']))
     upfiles = uploaded.keys()
 
     import collections
@@ -248,46 +264,79 @@ def create(rtid):
     #              robh\nCreated: 2011-07-01 02:47:24\n'],
     # 'ticket': u'1000', 'id': u'23192'}
     ordered_comments = collections.OrderedDict(sorted(comment_dict.items()))
+    #print ordered_comments
+    print ordered_comments
     for comment, contents in comment_dict.iteritems():
+        
         dbody = contents['body']
 
         if dbody['content'] is None and dbody['creator'] is None:
             continue
-
         if dbody['content'] is None:
             content = 'no content found'
         else:
-            content = ''.join(dbody['content'])
+            content_literal = []
+            for c in dbody['content'][0].splitlines():
+                if c.strip():
+                    content_literal.append('%%%{0}%%%'.format(c))
+            content = '\n'.join(content_literal)
 
         if 'This transaction appears to have no content' in content:
             content = None
 
-        cbody = "**%s** on `%s`\n\n**Description**: %s\n **Message**: %s\n" % (dbody['creator'],
-                                          dbody['created'],
-                                          dbody['description'],
-                                          content or 'no message')
+        auto_actions = ['Outgoing email about a comment recorded by RT_System',
+                        'Outgoing email recorded by RT_System']
 
-        cbody += "\n--------------------------\n"
-        cbody += "New Value: %s\n" % (dbody['nvalue'])
-        cbody += "Original Value: %s\n" % (dbody['ovalue'])
+        if dbody['description'] in auto_actions:
+            log("ignoring comment: %s/%s" % (dbody['description'], content))
+            continue
+
+        #cbody = "`%s`" % (dbody['description'],)
+        #cbody += '\n________________\n'
+
+        #if dbody['creator'] == 'RT_System':
+        #else:
+        #    cbody = "`%s`\n" % (dbody['description'],)
+        #cbody = "**%s** on `%s`\n\n**Description**: %s\n **Message**: %s\n" % (dbody['creator'],
+        #                                  dbody['created'],
+        #                                  content or 'no message')
+
+        cbody = ''
+        if content:
+            cbody += "`%s  wrote:`\n" % (dbody['creator'],)
+            cbody += "\n%s" % (content or 'no content',)
+
+        
+        #cbody += "New Value: %s\n" % (dbody['nvalue'])
+        #cbody += "Original Value: %s\n" % (dbody['ovalue'])
+
+        if dbody['nvalue'] or dbody['ovalue']:
+            value_update = ''
+            if dbody['creator'] == 'RT_System':
+                value_update = "\n**RT_System** updated values: "
+                value_update += "|**%s** | => |**%s**|" % (dbody['ovalue'] or 'none',
+                                                dbody['nvalue'] or 'none')
+                cbody += value_update
+
         afound = contents['body']['attached']
         cbody_attachments = []
         for a in afound:
             if a in upfiles:
                 cbody_attachments.append('{F%s}' % uploaded[a]['id'])
         if cbody_attachments:
-            cbody += "\n\n**Attached**:\n"
+            cbody += '\n__________________________\n\n'
             cbody += '\n'.join(cbody_attachments)
-        phab.task_comment(ticket['id'], cbody)
+        phabm.task_comment(ticket['id'], cbody)
 
     if rtinfo['Status'].lower() != 'open':
-        close_remark = '//importing issue status//'
-        if 'Resolved' in rtinfo and rtinfo['Resolved'] != 'Not set':
-            close_remark += "\n Resolved %s" % (rtinfo['Resolved'],)
-        phab.task_comment(ticket['id'], close_remark)
-        phab.set_status(ticket['id'], status)
-
-    print ticket['id']
+        #close_remark = '//importing issue status//'
+        #if 'Resolved' in rtinfo and rtinfo['Resolved'] != 'Not set':
+        #    close_remark += "\n Resolved %s" % (rtinfo['Resolved'],)
+        #phabm.task_comment(ticket['id'], close_remark)
+        log('setting %s to status %s' % (rtid, rtinfo['xstatus'].lower()))
+        phabdb.set_issue_status(ticket['phid'], rtinfo['xstatus'].lower())
+    pmig.close()
+    phabdb.set_task_mtime(ticket['phid'], rtlib.str_to_epoch(rtinfo['LastUpdated']))
     return True
 
 
