@@ -8,6 +8,7 @@ from util import vlog
 from util import errorlog as elog
 
 class phabapi:
+    """wrapper for phab api"""
 
     def __init__(self, user, cert, host):
 

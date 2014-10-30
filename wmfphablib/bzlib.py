@@ -4,12 +4,21 @@ prepend = 'bz'
 security_mask = '_hidden_'
 
 def sanitize_project_name(product, component):
+    """ translate bz product/component into valid project
+    :param product: str
+    :param component: str
+    """
     component_separator = '-'
-    product = product.replace('-', '_')
-    product = product.replace(' ', '_')
-    component = component.replace('/', '_and_')
-    component = component.replace('-', '_')
-    component = component.replace(' ', '_')
+    #product = product.replace('-', '_')
+    #component = component.replace('-', '_')
+    #component = component.replace(' ', '_')
+
+    product = re.sub('\s', '-', product)
+    product = product.replace('_', '-')
+
+    component = re.sub('\s', '-', component)
+    component = component.replace('_', '-')
+    component = component.replace('/', '-or-')
 
     return  "%s%s%s" % (product,
                          component_separator,
@@ -35,17 +44,26 @@ def build_comment(c):
 
     attachment = find_attachment_in_comment(c['text'])
     if attachment:
-        fmt_text = []
-        text = c['text'].splitlines()
-        for t in text:
-            if not t.startswith('Created attachment'):
-                fmt_text.append(t)
-        c['text'] = '\n'.join(fmt_text)
         clean_c['attachment'] = attachment
+
+    fmt_text = []
+    text = c['text'].splitlines()
+    for t in text:
+        if t.startswith('Created attachment'):
+            continue
+        elif t.startswith('***'):
+            fmt_text.append('%%%{0}%%%'.format(t))
+        else:               
+            fmt_text.append(t)
+    c['text'] = '\n'.join(fmt_text)
     clean_c['text'] = c['text']
     return clean_c
 
 def find_attachment_in_comment(text):
+    """Find attachment id in bz comment
+    :param text: str
+    :note: one attach per comment is possible
+    """
     a = re.search('Created\sattachment\s(\d+)', text)
     if a:
         return a.group(1)
@@ -53,7 +71,8 @@ def find_attachment_in_comment(text):
         return ''
 
 def status_convert(bz_status, bz_resolution):
-    """
+    """ convert status values from bz to phab terms
+
     UNCONFIRMED (default)   Open + Needs Triage (default)
     NEW     Open
     ASSIGNED                open
@@ -109,7 +128,8 @@ def priority_convert(bz_priority):
     return priorities[bz_priority.lower()]
 
 def see_also_transform():
-    #take see_also urls and transform for phab ref
+    """convert see also listing to T123 refs in phab
+    """
     from urlparse import urlparse
     see_also = []
     if buginfo['see_also']:

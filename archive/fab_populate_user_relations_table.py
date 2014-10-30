@@ -21,20 +21,20 @@ configfile = get_config_file()
 
 def fetch(fabid):
     ausers = {}
-    pmig = phabdb.phdb(db=config.bzmigrate_db)
-    issue = pmig.sql_x("SELECT id FROM bugzilla_meta WHERE id = %s", fabid)
+    pmig = phabdb.phdb(db='fab_migration')
+    issue = pmig.sql_x("SELECT id FROM fab_meta WHERE id = %s", fabid)
 
     if not issue:
         log('issue %s does not exist for user population' % (fabid,))
         return True
 
-    fpriority= pmig.sql_x("SELECT priority FROM bugzilla_meta WHERE id = %s", fabid)
+    fpriority= pmig.sql_x("SELECT priority FROM fab_meta WHERE id = %s", fabid)
     if fpriority[0] == ipriority['fetch_failed']:
         log('issue %s does not fetched successfully for user population (failed fetch)' % (fabid,))
         return True
 
 
-    tid, import_priority, jheader, com, created, modified = pmig.sql_x("SELECT * FROM bugzilla_meta WHERE id = %s", fabid)
+    tid, import_priority, jheader, com, created, modified = pmig.sql_x("SELECT * FROM fab_meta WHERE id = %s", fabid)
     header = json.loads(jheader)
     vlog(str(header))
     relations = {}

@@ -39,7 +39,13 @@ def create(bugid):
 
     pmig = phdb(db=config.bzmigrate_db)
 
-    current = pmig.sql_x("SELECT priority, header, comments, created, modified FROM bugzilla_meta WHERE id = %s", (bugid,))
+    current = pmig.sql_x("SELECT priority, \
+                          header, \
+                          comments, \
+                          created, \
+                          modified \
+                          FROM bugzilla_meta WHERE id = %s",
+                          (bugid,))
     if current:
         import_priority, buginfo, com, created, modified = current[0]
     else:    
@@ -47,13 +53,14 @@ def create(bugid):
         return False
 
     def get_ref(id):
-        refexists = phabdb.reference_ticket('%s%s' % (bzlib.prepend, id))
+        refexists = phabdb.reference_ticket('%s%s' % (bzlib.prepend,
+                                                      id))
         if refexists:
             return refexists
 
     if get_ref(bugid):
         log('reference ticket %s already exists' % (bugid,))
-        return True
+        #return True
 
     buginfo = json.loads(buginfo)
     com = json.loads(com)
@@ -110,7 +117,8 @@ def create(bugid):
     buginfo['cc'] = [c.split('@')[0] for c in buginfo['cc']]
 
     # Convert bugzilla source to phabricator
-    buginfo['status'] = bzlib.status_convert(buginfo['status'], buginfo['resolution'])
+    buginfo['status'] = bzlib.status_convert(buginfo['status'],
+                                             buginfo['resolution'])
     buginfo['priority'] = bzlib.priority_convert(buginfo['priority'])
 
     if '-d' in sys.argv:
@@ -159,10 +167,10 @@ def create(bugid):
     desc_block = "**Author:** `%s`\n\n**Description:**\n%s\n" % (description['author'],
                                                                  description['text'])
     desc_tail = '--------------------------'
-    desc_tail += "\n**URL**: %s" % (buginfo['url'].lower() or 'none')
-    desc_tail += "\n**Severity**: %s" % (buginfo['severity'].lower() or 'none')
-    desc_tail += "\n**Version**: %s" % (buginfo['version'].lower())
-    desc_tail += "\n**Whiteboard**: %s" % (buginfo['whiteboard'].lower() or 'none')
+    desc_tail += "\n**URL**: %s" % (buginfo['url'] or 'none')
+    desc_tail += "\n**Severity**: %s" % (buginfo['severity'] or 'none')
+    desc_tail += "\n**Version**: %s" % (buginfo['version'])
+    desc_tail += "\n**Whiteboard**: %s" % (buginfo['whiteboard'] or 'none')
 
     if 'alias' in buginfo:    
         desc_tail += "\n**Alias**: %s" % (buginfo['alias'])

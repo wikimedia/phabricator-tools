@@ -7,12 +7,14 @@ import getpass
 sys.path.append('/home/rush/python-rtkit/')
 from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
+from wmfphablib import errorlog as elog
 from wmfphablib import return_bug_list
 from wmfphablib import phdb
 from wmfphablib import phabdb
 from wmfphablib import mailinglist_phid
 from wmfphablib import set_project_icon
 from wmfphablib import log
+from wmfphablib import util
 from wmfphablib import rtlib
 from wmfphablib import vlog
 from wmfphablib import config
@@ -42,7 +44,10 @@ def create(rtid):
                                    config.rt_passwd,
                                    authenticators.CookieAuthenticator)
 
-    current = pmig.sql_x("SELECT priority, header, comments, created, modified FROM rt_meta WHERE id = %s", (rtid,))
+    current = pmig.sql_x("SELECT priority, header, \
+                          comments, created, modified \
+                          FROM rt_meta WHERE id = %s",
+                          (rtid,))
     if current:
         import_priority, rtinfo, com, created, modified = current[0]
     else:
@@ -150,8 +155,6 @@ def create(rtid):
         # NO: 686318802.html (application/octet-stream / 19.5k),
         # YES: Summary_686318802.pdf (application/unknown / 215.3k),
         extract = re.search('(.*)\.(\S{3,4})\s\((.*)\s\/\s(.*)\)', v)
-        #logger.debug(str(extract.groups()))
-        #print k, v
         # due to goofy email handling of signature/x-header/meta info
         # it seems they sometimes
         # become malformed attachments.  Such as when a response into
@@ -168,7 +171,7 @@ def create(rtid):
            raise Exception("no attachment extraction: %s %s (%s)" % (k, v, rtid))
            continue
         else:
-           log(extract.groups())
+           vlog(extract.groups())
            ainfo_ext[k] = extract.groups()
 
     attachment_types = ['pdf',
@@ -223,19 +226,8 @@ def create(rtid):
     for p in ptags:
         phids.append(phabm.ensure_project(p))
 
-    def priority_convert(priority):
-        priorities = { '0': 50, '50': 50}
-        return priorities.get(priority.lower(), 50)
-
-    def status_convert(status):
-        statuses = { 'resolved': 'resolved',
-                     'new': 'open',
-                     'open': 'open',
-                     'stalled': 'needs_info'}
-        return statuses[status.lower()]
-
-    rtinfo['xpriority'] = priority_convert(rtinfo['Priority'])
-    rtinfo['xstatus'] = status_convert(rtinfo['Status'])
+    rtinfo['xpriority'] = rtlib.priority_convert(rtinfo['Priority'])
+    rtinfo['xstatus'] = rtlib.status_convert(rtinfo['Status'])
 
     full_description = "**Author:** `%s`\n\n**Description:**\n%s\n" % (rtinfo['Creator'],
                                                                        rtinfo['Subject'])
@@ -251,7 +243,6 @@ def create(rtid):
                                         auxiliary={"std:maniphest:external_reference":"rt%s" % (rtid,),
                                                    "std:maniphest:security_topic":"%s" % ('none')})
 
-    log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
     phabdb.set_task_ctime(ticket['phid'], rtlib.str_to_epoch(rtinfo['Created']))
     upfiles = uploaded.keys()
 
@@ -264,8 +255,6 @@ def create(rtid):
     #              robh\nCreated: 2011-07-01 02:47:24\n'],
     # 'ticket': u'1000', 'id': u'23192'}
     ordered_comments = collections.OrderedDict(sorted(comment_dict.items()))
-    #print ordered_comments
-    print ordered_comments
     for comment, contents in comment_dict.iteritems():
         
         dbody = contents['body']
@@ -335,46 +324,63 @@ def create(rtid):
         #phabm.task_comment(ticket['id'], close_remark)
         log('setting %s to status %s' % (rtid, rtinfo['xstatus'].lower()))
         phabdb.set_issue_status(ticket['phid'], rtinfo['xstatus'].lower())
-    pmig.close()
+    log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
     phabdb.set_task_mtime(ticket['phid'], rtlib.str_to_epoch(rtinfo['LastUpdated']))
+    pmig.close()
     return True
 
 
 def run_create(rtid, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb(db='rt_migration')
-        import_priority = pmig.sql_x("SELECT priority FROM rt_meta WHERE id = %s", (rtid,))
+        pmig = phabdb.phdb(db=config.rtmigrate_db)
+        import_priority = pmig.sql_x("SELECT priority \
+                                      FROM rt_meta \
+                                      WHERE id = %s", \
+                                      (rtid,))
         if import_priority:
-            log('updating existing record')
-            pmig.sql_x("UPDATE rt_meta SET priority=%s modified=%s WHERE id = %s", (ipriority['creation_failed'],
-                                                                                    now(),
-                                                                                    rtid))
+            pmig.sql_x("UPDATE rt_meta \
+                       SET priority=%s modified=%s \
+                       WHERE id = %s",
+                       (ipriority['creation_failed'],
+                       now(),
+                       rtid))
         else:
-            print "%s does not seem to exist" % (rtid)
+            elog("%s does not seem to exist" % (rtid))
+        elog('failed to create %s' % (rtid,))
         pmig.close()
-        print 'failed to grab %s' % (rtid,)
-        return False
-    if tries == 0:
-        print 'failed to grab %s' % (rtid,)
         return False
     try:
-        if create(rtid):
-            print time.time()
-            print 'done with %s' % (rtid,)
-            return True
+        return create(rtid)
     except Exception as e:
         import traceback
         tries -= 1
         time.sleep(5)
         traceback.print_exc(file=sys.stdout)
-        print 'failed to grab %s (%s)' % (rtid, e)
+        elog('failed to grab %s (%s)' % (rtid, e))
         return run_create(rtid, tries=tries)
 
-if sys.stdin.isatty():
-    bugs = sys.argv[1:]
-else:
-    bugs = sys.stdin.read().strip('\n').strip().split()
+def main():
 
-for i in bugs:
-    if i.isdigit():
-        run_create(i)
+    if not util.can_edit_ref:
+        elog('%s reference field not editable on this install' % (bugid,))
+        sys.exit(1)
+
+    pmig = phdb(db=config.rtmigrate_db)
+    bugs = return_bug_list(dbcon=pmig)
+    pmig.close()
+
+    #Serious business
+    if 'failed' in sys.argv:
+        for b in bugs:
+            notice("Removing bugid %s" % (b,))
+            log(util.remove_issue_by_bugid(b, bzlib.prepend))
+
+    from multiprocessing import Pool
+    pool = Pool(processes=int(config.bz_createmulti))
+    _ =  pool.map(run_create, bugs)
+    complete = len(filter(bool, _))
+    failed = len(_) - complete
+    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
+
+if __name__ == '__main__':
+    main()

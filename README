@@ -96,7 +96,7 @@ CREATE TABLE user_relations_comments
 
 
 create table user_relations_jobs (id INT AUTO_INCREMENT PRIMARY KEY,
-			          pid INT(12),
+			          pid INT,
                                   source TEXT(30),
 			          start INT(12),
 			          finish INT(12),

@@ -1,7 +1,23 @@
+from rtppl import ppl as users
 import re
 from datetime import datetime
 import util
 
+prepend = 'rt'
+
+def user_lookup(name):
+    return users.get(name, None)
+
+def priority_convert(priority):
+    priorities = { '0': 50, '50': 50}
+    return priorities.get(priority.lower(), 50)
+
+def status_convert(status):
+    statuses = { 'resolved': 'resolved',
+                 'new': 'open',
+                 'open': 'open',
+                 'stalled': 'needs_info'}
+    return statuses[status.lower()]
 
 def links_to_dict(link_text):
     """ parse rt.wm.o/REST/1.0/ticket/<ticket-id>/links/show
@@ -17,7 +33,9 @@ def links_to_dict(link_text):
     #different types of links in 
     link_refs = {'refers_to': 'RefersTo:',
                  'refers_toby': 'ReferredToBy:',
-                 'children': 'Members:'}
+                 'children': 'Members:',
+                 'blockers': 'DependsOn',
+                 'blocks': 'DependedOnBy'}
 
     link_refs_callout = []
     for l in link_text.splitlines():

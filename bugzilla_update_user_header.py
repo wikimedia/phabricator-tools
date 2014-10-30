@@ -63,7 +63,7 @@ def update(user):
 
     if user['cc']:
         for ccd in user['cc']:
-            vlog(phabdb.add_task_cc_by_ref(user['userphid'], ccd))
+            vlog(phabdb.add_task_cc_by_ref(user['userphid'], ccd, bzlib.prepend))
 
     current = phabdb.get_user_migration_history(user['user'], pmig)
     if current:
