@@ -175,8 +175,8 @@ def create(bugid):
     if buginfo['op_sys'] != 'All':
         desc_tail += "\n**OS**: %s" % (buginfo['op_sys'])
 
-    if "rep_platform" in buginfo and buginfo['rep_platform'] != 'All':
-        desc_tail += "\n**Platform**: %s" % (buginfo['op_sys'])
+    if "platform" in buginfo and buginfo['platform'] != 'All':
+        desc_tail += "\n**Platform**: %s" % (buginfo['platform'])
 
     if buginfo['whiteboard']:
         desc_tail += "\n**Whiteboard**: %s" % (buginfo['whiteboard'])
