@@ -166,29 +166,32 @@ def create(bugid):
     created = epoch_to_datetime(description['creation_time'])
     desc_block = "**Author:** `%s`\n\n**Description:**\n%s\n" % (description['author'],
                                                                  description['text'])
+
+    # https://phabricator.wikimedia.org/T694
     desc_tail = '--------------------------'
-    desc_tail += "\n**URL**: %s" % (buginfo['url'] or 'none')
-    desc_tail += "\n**Severity**: %s" % (buginfo['severity'] or 'none')
     desc_tail += "\n**Version**: %s" % (buginfo['version'])
-    desc_tail += "\n**Whiteboard**: %s" % (buginfo['whiteboard'] or 'none')
+    desc_tail += "\n**Severity**: %s" % (buginfo['severity'] or 'none')
 
-    if 'alias' in buginfo:    
-        desc_tail += "\n**Alias**: %s" % (buginfo['alias'])
+    if buginfo['op_sys'] != 'All':
+        desc_tail += "\n**OS**: %s" % (buginfo['op_sys'])
 
-    if buginfo["cf_platform"] != "---":
-        desc_tail += "\n**Mobile Platform**: %s" % (buginfo["cf_platform"])
+    if "rep_platform" in buginfo and buginfo['rep_platform'] != 'All':
+        desc_tail += "\n**Platform**: %s" % (buginfo['op_sys'])
 
-    if "rep_platform" in buginfo and buginfo['op_sys'] != 'All':
-        desc_tail += "\n**Hardware/OS**: %s/%s" % (buginfo["rep_platform"], buginfo['op_sys'])
-    else:
-        desc_tail += "\n**Hardware/OS**: %s/%s" % ('unknown', 'unknown')
+    if buginfo['whiteboard']:
+        desc_tail += "\n**Whiteboard**: %s" % (buginfo['whiteboard'])
 
-    desc_tail += "\n**See Also**:\n%s" % ('\n'.join(buginfo['see_also']).lower() or 'none')
+    if buginfo['url']:
+        desc_tail += "\n**URL**: %s" % (buginfo['url'])
+
+    if buginfo['see_also']:
+        desc_tail += "\n**See Also**:\n%s" % ('\n'.join(buginfo['see_also']))
+
     if 'attachment' in description:
-            attached = int(description['attachment'])
-            if attached in uploads:
-                cattached = uploads[int(description['attachment'])]
-                desc_tail += "\n\n**Attached**: {%s}" % (cattached['objectName'])
+        attached = int(description['attachment'])
+        if attached in uploads:
+            cattached = uploads[int(description['attachment'])]
+            desc_tail += "\n\n**Attached**: {%s}" % (cattached['objectName'])
 
     full_description = desc_block + '\n' + desc_tail
 
@@ -228,7 +231,14 @@ def create(bugid):
                                             "std:maniphest:security_topic":"%s" % (buginfo["secstate"],)})
 
     log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
-    phabdb.set_task_ctime(ticket['phid'], int(buginfo['creation_time'].split('.')[0]))
+    botphid = phabdb.get_phid_by_username(config.phab_user)
+    phabdb.set_task_title_transaction(ticket['phid'],
+                                      botphid,
+                                      buginfo['viewPolicy'],
+                                      buginfo['editPolicy'])
+
+    phabdb.set_task_ctime(ticket['phid'],
+                          int(buginfo['creation_time'].split('.')[0]))
 
     fmt_comments = {}
     for c in clean_com:
