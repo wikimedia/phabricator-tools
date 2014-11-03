@@ -77,7 +77,6 @@ def status_convert(bz_status, bz_resolution):
     NEW     Open
     ASSIGNED                open
     PATCH_TO_REVIEW         open
-    NEED_INFO               needs_info
     RESOLVED FIXED          resolved
     RESOLVED INVALID        invalid
     RESOLVED WONTFIX        declined
@@ -94,7 +93,6 @@ def status_convert(bz_status, bz_resolution):
                 'resolved': 'resolved',
                 'reopened': 'open',
                 'closed': 'resolved',
-                'need_info': 'needs_info',
                 'verified': 'resolved',
                 'assigned': 'open',
                 'unconfirmed': 'open',
