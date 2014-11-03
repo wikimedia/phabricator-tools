@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import time
 import json
 import os
@@ -63,16 +64,15 @@ def create(rtid):
         log('reference ticket %s already exists' % (rtid,))
         #return True
 
-    #Ex:
-    #id: ticket/8175/attachments\n
-    #Attachments: 141490: (Unnamed) (multipart/mixed / 0b),
-    #             141491: (Unnamed) (text/html / 23b),
-    #             141492: 0jp9B09.jpg (image/jpeg / 117.4k),
+    # Example:
+    # id: ticket/8175/attachments\n
+    # Attachments: 141490: (Unnamed) (multipart/mixed / 0b),
+    #              141491: (Unnamed) (text/html / 23b),
+    #              141492: 0jp9B09.jpg (image/jpeg / 117.4k),
     attachments = response.get(path="ticket/%s/attachments/" % (rtid,))
     if not attachments:
         raise Exception("no attachment response: %s" % (rtid))
 
-    #/#TMP
     history = response.get(path="ticket/%s/history?format=l" % (rtid,))
 
     rtinfo = json.loads(rtinfo)
@@ -94,12 +94,13 @@ def create(rtid):
         comment_dict[i]['text_body'] = body
         comment_dict[i]['attached'] = attached
 
-    #Ticket: 8175\nTimeTaken: 0\n
-    #Type: 
-    #Create\nField:
-    #nData: \nDescription: Ticket created by cpettet\n\n
-    #Content: test ticket description\n\n\n
-    #Creator: cpettet\nCreated: 2014-08-21 21:21:38\n\n'}
+    # Example:
+    # Ticket: 8175\nTimeTaken: 0\n
+    # Type: 
+    # Create\nField:
+    # Data: \nDescription: Ticket created by cpettet\n\n
+    # Content: test ticket description\n\n\n
+    # Creator: cpettet\nCreated: 2014-08-21 21:21:38\n\n'}
     params = {'id': 'id:(.*)',
               'ticket': 'Ticket:(.*)',
               'timetaken': 'TimeTaken:(.*)',
@@ -125,9 +126,19 @@ def create(rtid):
             content = content.split('Creator:')
             comment_dict[k]['body']['content'] = content
 
+        creator = comment_dict[k]['body']['creator']
+        if creator and '@' in creator:
+            comment_dict[k]['body']['creator'] = rtlib.sanitize_email(creator)
+
         #15475: untitled (18.7k)
         comment_attachments= re.findall('(\d+):\s', v['attached'])
         comment_dict[k]['body']['attached'] = comment_attachments
+
+    # due to the nature of the RT api sometimes whitespacing becomes
+    # a noise comment
+    if not any(comment_dict[comment_dict.keys()[0]]['body'].values()):
+        vlog('dropping %s comment' % (str(comment_dict[comment_dict.keys()[0]],))
+        del comment_dict[0]
 
     #attachments into a dict
     def attach_to_kv(attachments_output):
@@ -159,12 +170,12 @@ def create(rtid):
         # it seems they sometimes
         # become malformed attachments.  Such as when a response into
         # rt was directed to a mailinglist
-        #EX:
-        #    ->Attached Message Part (text/plain / 158b)
+        # Example:
+        #     ->Attached Message Part (text/plain / 158b)
         #
-        #   Private-l mailing list
-        #   Private-l@lists.wikimedia.org
-        #   https://lists.wikimedia.org/mailman/listinfo/private-l
+        #    Private-l mailing list
+        #    Private-l@lists.wikimedia.org
+        #    https://lists.wikimedia.org/mailman/listinfo/private-l
         if not extract and v.startswith('Attached Message Part'):
             continue
         elif not extract:
@@ -229,8 +240,32 @@ def create(rtid):
     rtinfo['xpriority'] = rtlib.priority_convert(rtinfo['Priority'])
     rtinfo['xstatus'] = rtlib.status_convert(rtinfo['Status'])
 
-    full_description = "**Author:** `%s`\n\n**Description:**\n%s\n" % (rtinfo['Creator'],
-                                                                       rtinfo['Subject'])
+    import collections
+    # {'ovalue': u'open',
+    # 'description': u"Status changed from 'open' to 'resolved' by robh",
+    # 'nvalue': None, 'creator': u'robh', 'attached': [],
+    # 'timetaken': u'0', 'created': u'2011-07-01 02:47:24', 
+    # 'content': [u' This transaction appears to have no content\n', u'
+    #              robh\nCreated: 2011-07-01 02:47:24\n'],
+    # 'ticket': u'1000', 'id': u'23192'}
+    ordered_comments = collections.OrderedDict(sorted(comment_dict.items()))
+    upfiles = uploaded.keys()
+
+    # much like bugzilla comment 0 is the task description
+    header = comment_dict[comment_dict.keys()[0]]
+    del comment_dict[comment_dict.keys()[0]]
+    full_description = "**Author:** `%s`\n\n**Description:**\n%s\n" % (rtinfo['Creator'].strip(),
+                                                                       header['body']['content'][0])
+
+
+    hafound = header['body']['attached']
+    header_attachments = []
+    for at in hafound:
+        if at in upfiles:
+            header_attachments.append('{F%s}' % uploaded[at]['id'])
+    if header_attachments:
+        full_description += '\n__________________________\n\n'
+        full_description += '\n'.join(header_attachments)
 
     vlog("Ticket Info: %s" % (full_description,))
     ticket =  phab.maniphest.createtask(title=rtinfo['Subject'],
@@ -244,21 +279,10 @@ def create(rtid):
                                                    "std:maniphest:security_topic":"%s" % ('none')})
 
     phabdb.set_task_ctime(ticket['phid'], rtlib.str_to_epoch(rtinfo['Created']))
-    upfiles = uploaded.keys()
 
-    import collections
-    # {'ovalue': u'open',
-    # 'description': u"Status changed from 'open' to 'resolved' by robh",
-    # 'nvalue': None, 'creator': u'robh', 'attached': [],
-    # 'timetaken': u'0', 'created': u'2011-07-01 02:47:24', 
-    # 'content': [u' This transaction appears to have no content\n', u'
-    #              robh\nCreated: 2011-07-01 02:47:24\n'],
-    # 'ticket': u'1000', 'id': u'23192'}
-    ordered_comments = collections.OrderedDict(sorted(comment_dict.items()))
+    vlog(str(ordered_comments))
     for comment, contents in comment_dict.iteritems():
-        
         dbody = contents['body']
-
         if dbody['content'] is None and dbody['creator'] is None:
             continue
         if dbody['content'] is None:
@@ -277,7 +301,7 @@ def create(rtid):
                         'Outgoing email recorded by RT_System']
 
         if dbody['description'] in auto_actions:
-            log("ignoring comment: %s/%s" % (dbody['description'], content))
+            vlog("ignoring comment: %s/%s" % (dbody['description'], content))
             continue
 
         #cbody = "`%s`" % (dbody['description'],)
@@ -292,13 +316,10 @@ def create(rtid):
 
         cbody = ''
         if content:
-            cbody += "`%s  wrote:`\n" % (dbody['creator'],)
-            cbody += "\n%s" % (content or 'no content',)
+            cbody += "`%s  wrote:`\n" % (dbody['creator'].strip(),)
+            cbody += "\n%s" % (content.strip() or 'no content',)
 
         
-        #cbody += "New Value: %s\n" % (dbody['nvalue'])
-        #cbody += "Original Value: %s\n" % (dbody['ovalue'])
-
         if dbody['nvalue'] or dbody['ovalue']:
             value_update = ''
             if dbody['creator'] == 'RT_System':
@@ -318,10 +339,6 @@ def create(rtid):
         phabm.task_comment(ticket['id'], cbody)
 
     if rtinfo['Status'].lower() != 'open':
-        #close_remark = '//importing issue status//'
-        #if 'Resolved' in rtinfo and rtinfo['Resolved'] != 'Not set':
-        #    close_remark += "\n Resolved %s" % (rtinfo['Resolved'],)
-        #phabm.task_comment(ticket['id'], close_remark)
         log('setting %s to status %s' % (rtid, rtinfo['xstatus'].lower()))
         phabdb.set_issue_status(ticket['phid'], rtinfo['xstatus'].lower())
     log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
