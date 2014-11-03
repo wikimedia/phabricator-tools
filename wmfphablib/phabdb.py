@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import os
 import json
 import MySQLdb
 import traceback
@@ -285,6 +286,7 @@ def set_comment_content(transxphid, content):
     p.close()
 
 def set_transaction_time(transxphid, metatime):
+
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
@@ -334,10 +336,6 @@ def set_comment_author(transxphid, userphid):
              WHERE transactionPHID=%s",
              (userphid, transxphid))
 
-def set_creation_transaction_time(taskphid, metatime):
-    transxphid = get_task_creation_transaction(taskphid)
-    set_transaction_time(transxphid, metatime)
-
 def set_task_mtime(taskphid, mtime):
     """set manual epoch modtime for task
     :param taskphid: str
@@ -363,8 +361,9 @@ def set_task_ctime(taskphid, ctime):
     p.sql_x("UPDATE maniphest_task \
              SET dateCreated=%s \
              WHERE phid=%s", (ctime, taskphid))
-    transxphid = get_task_creation_transaction(taskphid)
-    set_transaction_time(transxphid, ctime)
+    titlexphid = get_task_title_transaction(taskphid)
+    set_transaction_time(titlexphid, ctime)
+
     p.close()
 
 def get_emails(modtime=0):
@@ -403,22 +402,111 @@ def set_blocked_task(blocker, blocked):
     p.close()
     return get_tasks_blocked(blocker)
 
+def phid_hash():
+    """get a random hash for PHID building"""
+    return os.urandom(20).encode('hex')[:20]
 
-def get_task_creation_transaction(taskphid):
-    """ get the tasks I'm blocking
-    :param taskphid: str
-    :returns: list
+def task_transaction_phid():
+    """get a transaction PHID"""
+    return 'PHID-XACT-TASK-' + str(phid_hash()[:15])
+
+def get_task_title(phid):
+    """get the title of a task by phid
+    :param phid: str
     """
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
-    _ = p.sql_x("SELECT phid \
-                 from maniphest_transaction \
-                 where objectPHID=%s \
-                 and transactionType='title'", (taskphid,))
+
+    _ = p.sql_x("SELECT title \
+                 from maniphest_task \
+                 WHERE phid=%s", (phid,))
     p.close()
     if _ is not None and len(_[0]) > 0:
         return _[0][0]
+
+def get_task_title_transaction(phid):
+    """ get the transaction of type 'title' for a task
+    :param phid: str
+    :note: this results in created date / author in UI
+    """
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT phid \
+                 from maniphest_transaction \
+                 where objectPHID=%s \
+                 and transactionType='title'", (phid,))
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
+def set_task_title_transaction(taskphid,
+                               authorphid,
+                               viewPolicy,
+                               editPolicy,
+                               source='legacy'):
+    """creates a title transaction for "created"
+       transaction display in UI.
+    :param taskphid: str
+    :authorphid: str
+    :viewPolicy: str
+    :editPolicy: str
+    :source: valid source type as str
+    :note:
+        * source must match a valid upstream type
+        * this crutches an inconsistency where tasks
+          created via the UI are assigned these 
+          transactions and via conduit are not.
+    """
+
+    existing = get_task_title_transaction(taskphid)
+    if existing:
+        return
+
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    dateCreated = int(time.time())
+    dateModified = int(time.time())
+    newphid = task_transaction_phid()
+    contentSource = json.dumps({"source": source,
+                                "params": {"ip":"127.0.0.1"}})
+    commentVersion = 0
+    title = get_task_title(taskphid)
+    oldValue = 'null'
+
+    p.sql_x("INSERT INTO maniphest_transaction \
+                 (phid, \
+                  authorPHID, \
+                  objectPHID, \
+                  viewPolicy, \
+                  editPolicy, \
+                  commentVersion, \
+                  transactionType, \
+                  oldValue, \
+                  newValue, \
+                  contentSource, \
+                  metadata, \
+                  dateCreated, \
+                  dateModified) \
+                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                  (newphid,
+                  authorphid,
+                  taskphid,
+                  viewPolicy,
+                  editPolicy,
+                  commentVersion,
+                  'title',
+                  oldValue,
+                  title,
+                  contentSource,
+                  json.dumps([]),
+                  dateCreated,
+                  dateModified))
+    p.close()
 
 def get_tasks_blocked(taskphid):
     """ get the tasks I'm blocking
@@ -510,6 +598,20 @@ def get_verified_user(email):
     else:
         #log("%s is not a verified email" % (email,))
         return [()]
+
+def get_phid_by_username(username):
+    """ get phid of user
+    :param userame: str
+    """
+    p = phdb(db='phabricator_user',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    query = "SELECT phid \
+            from user where username=%s"
+    _ = p.sql_x(query, (username,))
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
 
 def get_user_email_info(emailaddress):
     """ get data on user email
@@ -715,11 +817,14 @@ def set_task_author(authorphid, id):
     p.sql_x("UPDATE maniphest_task \
              SET authorPHID=%s \
              WHERE id=%s", (authorphid, id))
+
     # Phab natively CC's authors so we do the same
     ticketphid = get_task_phid_by_id(id)
-    set_task_subscriber(ticketphid, authorphid)
+
+    add_task_cc(ticketphid, authorphid)
+
     # separately stored transaction for creation of object
-    transxphid = get_task_creation_transaction(ticketphid)
+    transxphid = get_task_title_transaction(ticketphid)
     p.sql_x("UPDATE maniphest_transaction \
              SET authorPHID=%s \
              WHERE phid=%s",
@@ -742,9 +847,12 @@ def add_task_cc(ticketphid, userphid):
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
+
+    # Get json array of subscribers
     query = "SELECT ccPHIDs FROM \
            maniphest_task WHERE phid = %s"
     jcc_list = p.sql_x(query, ticketphid)
+
     if jcc_list is None:
         util.notice("!Ignoring CC for user %s on issue %s" % (userphid,
                                                               ticketphid))
@@ -755,7 +863,7 @@ def add_task_cc(ticketphid, userphid):
     p.sql_x("UPDATE maniphest_task \
              SET ccPHIDs=%s \
              WHERE phid=%s", (json.dumps(cc_list), ticketphid))
-    final_jcclist = p.sql_x(ccq, ticketphid)[0]
+    final_jcclist = p.sql_x(query, ticketphid)[0]
     set_task_subscriber(ticketphid, userphid)
     p.close()
     return json.loads(final_jcclist[0])
