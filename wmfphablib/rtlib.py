@@ -6,7 +6,24 @@ import util
 prepend = 'rt'
 
 def user_lookup(name):
+    """ match user name in rt to user email"""
     return users.get(name, None)
+
+def sanitize_email(email):
+    """make an email str worthy of crawlers
+    :param email: str
+    """
+    if '@' not in email:
+        return ''
+    u, e = email.split('@')
+    return '%s at %s' % (u, e.split('.')[0])
+
+def email_lookup(email):
+    """ match user email in rt to user name"""
+    key = [key for key, value in users.items() if value == email]
+    if len(key) > 0:
+        return key[0]
+    return None
 
 def priority_convert(priority):
     priorities = { '0': 50, '50': 50}
