@@ -384,10 +384,13 @@ def set_blocked_task(blocker, blocked):
     """
     blocked_already = get_tasks_blocked(blocker)
     if blocked in blocked_already:
+        util.vlog("%s already blocking %s" % (blocker,
+                                              blocked)
         return
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
+
     insert_values = (blocker, 4, blocked, int(time.time()), 0)
     p.sql_x("INSERT INTO edge \
              (src, type, dst, dateCreated, seq) \
@@ -782,6 +785,34 @@ def archive_project(project):
              SET status=%s \
              WHERE name=%s", (100, project))
     p.close()
+
+def set_project_policy(projphid, view, edit):
+    """set a project as view policy
+    :param projphid: str
+    :param view: str
+    :param edit: str
+    """
+    p = phdb(db='phabricator_project',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    p.sql_x("UPDATE project \
+             SET viewPolicy=%s, \
+             editPolicy=%s \
+             WHERE phid=%s", (view,
+                              edit,
+                              projphid))
+    p.close()
+
+def get_project_phid(project):
+    p = phdb(db='phabricator_project',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    _ = p.sql_x("SELECT phid from project \
+                 WHERE name=%s", (project))
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
 
 def set_project_icon(project, icon='briefcase', color='blue'):
     """ tag       = tags

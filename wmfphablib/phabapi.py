@@ -77,10 +77,19 @@ class phabapi:
                                         auxiliary={"std:maniphest:external_reference":"%s" % (reference,),
                                                    "std:maniphest:security_topic": security})
 
-    def ensure_project(self, project_name, pmembers=[]):
-        """make sure project exists, return phid either way"""
+    def ensure_project(self, project_name,
+                             pmembers=[],
+                             view='public',
+                             edit='public'):
+        """make sure project exists
+        :param project_name: str
+        :param pmembers: list
+        :param view: str
+        :param edit str"""
 
         existing_proj = self.con.project.query(names=[project_name])
+
+
         if not existing_proj['data']:
             log('need to create project(s) ' + project_name)
             try:
@@ -91,14 +100,13 @@ class phabapi:
             existing_proj = self.con.project.query(names=[project_name])
             log(str(existing_proj))
             phid = existing_proj['data'][existing_proj['data'].keys()[0]]['phid']
+            phabdb.set_project_policy(phid, view, edit)
         else:
             phid = existing_proj['data'][existing_proj['data'].keys()[0]]['phid']
             log(project_name + ' exists')
         return phid
 
     def upload_file(self, name, data, dump=False):
-        print "name", name
-        print len(data)
 
         if dump:
             with open(name, 'wb') as f:

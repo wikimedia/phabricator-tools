@@ -68,9 +68,12 @@ def create(bugid):
     vlog(bugid)
     vlog(buginfo)
 
+    def is_sensitive(name):
+        return name.strip().lower().startswith('security')
+
     buginfo["secstate"] = 'none'
     # And the relevant herald rule must be in place.
-    if buginfo["product"].lower() == 'security':
+    if is_sensitive(buginfo["product"]):
         buginfo["secstate"] = 'security-bug'
         log("found security-bug issue %s" % (bugid,))
 
@@ -102,6 +105,7 @@ def create(bugid):
         if a['is_private']:
             continue
         vlog("processing bz attachment %s" % (str(a)))
+
         upload = phabm.upload_file(a['file_name'], a['data'].data)
         a['phid'] = upload['phid']
         a['name'] = upload['name']
@@ -202,9 +206,20 @@ def create(bugid):
                 k = 'operations'
             ptags.append((k, 'tags'))
 
+    def project_security_settings(pname):
+        if is_sensitive(pname):
+            ephid = phabdb.get_project_phid('security')
+            edit = ephid
+        else:
+            edit = 'public'
+        view = 'public'
+        return edit, view
+
     phids = []
     for p in ptags:
-        phids.append(phabm.ensure_project(p[0]))
+        edit, view = project_security_settings(p[0])
+        phid = phabm.ensure_project(p[0], edit=edit, view=view)
+        phids.append(phid)
         if p[1] is not None:
             vlog("setting project %s icon to %s" % (p[0], p[1]))
             set_project_icon(p[0], icon=p[1])
