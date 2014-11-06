@@ -98,11 +98,11 @@ CREATE TABLE user_relations_comments
 create table user_relations_jobs
 (
                                   id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-			          pid INT,
+			          pid INT(12),
                                   source TEXT(30),
 			          start INT(12),
 			          finish INT(12),
-			          status INT,
+			          status INT(12),
 			          start_epoch INT(12),
 			          finish_epoch INT(12),
 			          user_count INT,

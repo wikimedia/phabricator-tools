@@ -286,6 +286,10 @@ def set_comment_content(transxphid, content):
     p.close()
 
 def set_transaction_time(transxphid, metatime):
+    """ update the time on a transaction
+    :param transxphid: str
+    :param metatime: str
+    """
 
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
@@ -564,6 +568,15 @@ def get_task_id_by_phid(taskid):
     if _ is not None and len(_[0]) > 0:
         return _[0][0]
 
+def set_task_id(id, phid):
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    print "UPDATE maniphest_task set id=%s where phid=%s" % (id, phid)
+    p.sql_x("UPDATE maniphest_task set id=%s where phid=%s", (id, phid))
+    p.close()
+
 def get_task_phid_by_id(taskid):
     """ get task phid by id
     :param taskid: str
@@ -594,8 +607,10 @@ def get_user_relations():
     return _
 
 def get_verified_user(email):
+    """ check if email is verified
+    :param email: str
+    """
     phid, email, is_verified = get_user_email_info(email)
-    #log("Single specified user: %s, %s, %s" % (phid, email, is_verified))
     if is_verified:
         return [(phid, email)]
     else:
@@ -630,7 +645,12 @@ def get_user_email_info(emailaddress):
     return _[0] or ''
 
 def get_verified_users(modtime, limit=None):
-    #Find the task in new Phabricator that matches our lookup
+    """return verified user emails since modtime with 
+    last time seen
+    :param modtime: epoch str
+    :param limit: int
+    :returns: tuple
+    """
     verified = get_verified_emails(modtime=modtime, limit=limit)
     create_times = [v[2] for v in verified]
     try:
@@ -640,6 +660,11 @@ def get_verified_users(modtime, limit=None):
     return verified, newest
 
 def get_verified_emails(modtime=0, limit=None):
+    """ get verified emails by modtime
+    :param modtime: epoch str
+    :param limit: int
+    :returns: list
+    """
     p = phdb(db='phabricator_user',
              user=phuser_user,
              passwd=phuser_passwd)
@@ -657,7 +682,9 @@ def reference_ticket(reference):
     :param reference: str ref id
     :returns: str of phid
     """
-    p = phdb(db='phabricator_maniphest', user=phmanifest_user, passwd=phmanifest_passwd)
+    p = phdb(db='phabricator_maniphest',
+             user=phmanifest_user,
+             passwd=phmanifest_passwd)
     _ = p.sql_x("SELECT objectPHID \
                  FROM maniphest_customfieldstringindex \
                  WHERE indexValue = %s", reference)
