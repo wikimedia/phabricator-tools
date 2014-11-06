@@ -55,6 +55,10 @@ def create(rtid):
         elog('%s not present for migration' % (rtid,))
         return False
 
+    if not rtinfo:
+        log("ignoring invalid data for issue %s" % (rtid,))
+        return False
+        
     def get_ref(id):
         refexists = phabdb.reference_ticket('%s%s' % (rtlib.prepend, id))
         if refexists:
@@ -63,6 +67,9 @@ def create(rtid):
     if get_ref(rtid):
         log('reference ticket %s already exists' % (rtid,))
         #return True
+
+    def remove_sig(content):
+        return re.split('--\s?\n', content)[0]
 
     # Example:
     # id: ticket/8175/attachments\n
@@ -74,6 +81,7 @@ def create(rtid):
         raise Exception("no attachment response: %s" % (rtid))
 
     history = response.get(path="ticket/%s/history?format=l" % (rtid,))
+
 
     rtinfo = json.loads(rtinfo)
     comments = json.loads(com)
@@ -137,7 +145,7 @@ def create(rtid):
     # due to the nature of the RT api sometimes whitespacing becomes
     # a noise comment
     if not any(comment_dict[comment_dict.keys()[0]]['body'].values()):
-        vlog('dropping %s comment' % (str(comment_dict[comment_dict.keys()[0]],))
+        vlog('dropping %s comment' % (str(comment_dict[comment_dict.keys()[0]],)))
         del comment_dict[0]
 
     #attachments into a dict
@@ -254,8 +262,10 @@ def create(rtid):
     # much like bugzilla comment 0 is the task description
     header = comment_dict[comment_dict.keys()[0]]
     del comment_dict[comment_dict.keys()[0]]
+    dtext = '\n'.join([l.strip() for l in header['body']['content'][0].splitlines()])
+    dtext = rtlib.shadow_emails(dtext)
     full_description = "**Author:** `%s`\n\n**Description:**\n%s\n" % (rtinfo['Creator'].strip(),
-                                                                       header['body']['content'][0])
+                                                                       dtext)
 
 
     hafound = header['body']['attached']
@@ -273,8 +283,6 @@ def create(rtid):
                                         projectPHIDs=phids,
                                         ccPHIDs=[],
                                         priority=rtinfo['xpriority'],
-                                        viewPolicy = 'public',
-                                        editPolicy = 'public',
                                         auxiliary={"std:maniphest:external_reference":"rt%s" % (rtid,),
                                                    "std:maniphest:security_topic":"%s" % ('none')})
 
@@ -283,15 +291,31 @@ def create(rtid):
     vlog(str(ordered_comments))
     for comment, contents in comment_dict.iteritems():
         dbody = contents['body']
+
         if dbody['content'] is None and dbody['creator'] is None:
             continue
-        if dbody['content'] is None:
+        elif dbody['content'] is None:
             content = 'no content found'
         else:
+            # peel off email signatures
+            #if 'Forwarded message' in dbody['content'][0]:
+            #    nosig = rtlib.shadow_emails(dbody['content'][0])
+            #else:
+            #nosig = remove_sig(dbody['content'][0])
+            mailsan = rtlib.shadow_emails(dbody['content'][0])
             content_literal = []
-            for c in dbody['content'][0].splitlines():
-                if c.strip():
-                    content_literal.append('%%%{0}%%%'.format(c))
+            for c in mailsan.splitlines():
+                if c.strip() and not c.lstrip().startswith('>'):
+                    # in remarkup having '--' on a new line seems to bold last
+                    # line so signatures really cause issues
+                    if c.strip() == '--':
+                        content_literal.append('%%%{0}%%%'.format(c.strip()))
+                    else:
+                        content_literal.append('{0}'.format(c.strip()))
+                elif c.strip():
+                    content_literal.append(c.strip())
+                else:
+                    vlog("ignoring content line %s" % (c,))
             content = '\n'.join(content_literal)
 
         if 'This transaction appears to have no content' in content:
@@ -322,11 +346,50 @@ def create(rtid):
         
         if dbody['nvalue'] or dbody['ovalue']:
             value_update = ''
-            if dbody['creator'] == 'RT_System':
-                value_update = "\n**RT_System** updated values: "
-                value_update += "|**%s** | => |**%s**|" % (dbody['ovalue'] or 'none',
-                                                dbody['nvalue'] or 'none')
-                cbody += value_update
+            value_update_text = rtlib.shadow_emails(dbody['description'])
+            value_update_text = value_update_text.replace('fsck.com-rt', 'https')
+            relations = ['Reference by ticket',
+                         'Dependency by',
+                         'Reference to ticket',
+                         'Dependency on',
+                         'Merged into ticket',
+                         'Membership in']
+
+            states = ['open', 'resolved', 'new', 'stalled']
+            if any(map(lambda x: x in dbody['description'], relations)):
+                value_update = value_update_text
+            #    value_update = dbody['description'].replace('fsck.com-rt', 'https')
+
+            #    value_update += "%s added reference %s" % (dbody['creator'], ref)
+            #elif 'Dependency by' in dbody['description']:
+            #    value_update = dbody['description'].strip()
+            #    ref = dbody['nvalue'].replace('fsck.com-rt', 'https')
+            #    value_update = "%s added depended on by %s" % (dbody['creator'], ref)
+
+            elif re.search('tags\s\S+\sadded', dbody['description']):
+                value_update = "%s added tag %s" % (dbody['creator'], dbody['nvalue'])
+            elif re.search('Taken\sby\s\S+', dbody['description']):
+                value_update = "Issue taken by **%s**" % (dbody['creator'],)
+            #elif dbody['nvalue'].strip() or dbody['ovalue'].strip() in states:
+            #    print "FOUND IN STATES", dbody['nvalue'], dbody['ovalue']
+            #    value_update = "\n**%s** updated values: " % (dbody['creator'],)
+            #    value_update += "|**%s** | => |**%s**|" % (dbody['ovalue'] or 'none',
+            #                                               dbody['nvalue'] or 'none')
+            else:
+                value_update = "//%s//" % (value_update_text,)
+
+            #elif dbody['ovalue'].isdigit() and dbody['nvalue'].isdigit():
+            #    value_update = "//%s//" % (value_update_text,)
+            #elif not dbody['ovalue'].strip() and dbody['nvalue'].isdigit():
+            #    value_update = "//%s//" % (value_update_text,)
+            #elif not dbody['nvalue'].strip() and dbody['ovalue'].isdigit():
+            #    value_update = "//%s//" % (value_update_text,)
+            #else:
+            #    print dbody['description']
+            #    value_update = "\n**%s** updated values: " % (dbody['creator'],)
+            #    value_update += "|**%s** | => |**%s**|" % (dbody['ovalue'] or 'none',
+            #                                               dbody['nvalue'] or 'none')
+            cbody += value_update
 
         afound = contents['body']['attached']
         cbody_attachments = []
