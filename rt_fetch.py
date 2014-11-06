@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import time
 import os
 import re
@@ -26,10 +27,16 @@ def fetch(tid):
                                    config.rt_login,
                                    config.rt_passwd,
                                    authenticators.CookieAuthenticator)
-  
+    log("fetching issue %s" % (tid,))
     tinfo = response.get(path="ticket/%s" % (tid,))
     history = response.get(path="ticket/%s/history?format=l" % (tid,))
     links = response.get(path="ticket/%s/links/show" % (tid,))
+    vlog(tinfo)
+
+    # some private todo's and such
+    if 'You are not allowed to display' in tinfo:
+        log("Access denied for %s" % (tid,))
+        return False
 
     # we get back freeform text and create a dict
     dtinfo = {}
@@ -56,8 +63,6 @@ def fetch(tid):
 
     com = json.dumps(comments)
     tinfo = json.dumps(dtinfo)
-    print tinfo
-
     pmig = phdb(db=config.rtmigrate_db)
     insert_values =  (tid, creation_priority, tinfo, com, now(), now())
     pmig.sql_x("INSERT INTO rt_meta \
