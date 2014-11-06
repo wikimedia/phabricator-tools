@@ -385,7 +385,7 @@ def set_blocked_task(blocker, blocked):
     blocked_already = get_tasks_blocked(blocker)
     if blocked in blocked_already:
         util.vlog("%s already blocking %s" % (blocker,
-                                              blocked)
+                                              blocked))
         return
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,

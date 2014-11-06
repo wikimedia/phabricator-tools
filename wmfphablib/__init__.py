@@ -30,6 +30,7 @@ ipriority = {'creation_failed': 6,
              'creation_success': 7,
              'fetch_failed': 5,
              'na': 0,
+             'denied': 2,
              'update_success': 8,
              'update_failed': 9,
              'unresolved': 1}

@@ -13,6 +13,12 @@ def user_lookup(name):
     """ match user name in rt to user email"""
     return users.get(name, None)
 
+def shadow_emails(text):
+    emails =  re.findall('([^@|\s]+@[^@]+\.[^@|\s]+)', text)
+    for e in emails:
+        text = text.replace(e, sanitize_email(e))
+    return text
+
 def sanitize_email(email):
     """make an email str worthy of crawlers
     :param email: str
@@ -20,7 +26,8 @@ def sanitize_email(email):
     if '@' not in email:
         return ''
     u, e = email.split('@')
-    return '%s at %s' % (u, e.split('.')[0])
+    u = u.lstrip('<')
+    return '<%s at %s>' % (u, e.split('.')[0])
 
 def email_lookup(email):
     """ match user email in rt to user name"""
