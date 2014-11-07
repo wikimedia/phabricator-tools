@@ -12,6 +12,31 @@ from datetime import datetime
 
 prepend = 'rt'
 
+def rt_cc_defaults(queue):
+    #'operations-codfw': '(rhalsell,mbergsma,cmjohnson)
+    #'operations-eqiad': (mbergsma,rhalsell,'ashburn dc engineers')
+    #'esams': 'operations-esams',,none,(mbergsma,rhalsell,'haarlem dc engineers')
+    #'ops-pmtpa: ',none,(mbergsma,rhalsell,'tampa dc engineers')
+    #       'procurement': ,none,(mbergsma,rhalsell)
+    #       'ulsfo': ,none,(rhalsell,'san francisco dc engineers')
+
+    ccs = {'access-requests': 'operations',
+           'core-ops': 'operations',
+           'codfw': 'operations-codfw',
+           'domains': 'operations',
+           'eqiad': 'operations-eqiad',
+           'esams': 'operations-esams',
+           'legal': 'operations',
+           'maint-announce': 'operations',
+           'network': 'operations',
+           'ops-requests': 'operations',
+           'pmtpa': 'operations-pmtpa',
+           'procurement': 'operations-procurement',
+           'security-announce': 'operations',
+           'todo': 'operations',
+           'ulsfo': 'operations-ulsfo'}
+    return ccs.get(queue, None)
+
 def project_translate(pname):
     projs = {'core-ops': 'ops-core',
              'network': 'ops-network',
