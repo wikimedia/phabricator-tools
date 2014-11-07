@@ -286,10 +286,6 @@ def set_comment_content(transxphid, content):
     p.close()
 
 def set_transaction_time(transxphid, metatime):
-    """ update the time on a transaction
-    :param transxphid: str
-    :param metatime: str
-    """
 
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
@@ -417,6 +413,9 @@ def task_transaction_phid():
     """get a transaction PHID"""
     return 'PHID-XACT-TASK-' + str(phid_hash()[:15])
 
+def gen_user_phid():
+    return 'PHID-USER-' + str(phid_hash()[:20])
+
 def get_task_title(phid):
     """get the title of a task by phid
     :param phid: str
@@ -448,6 +447,82 @@ def get_task_title_transaction(phid):
     p.close()
     if _ is not None and len(_[0]) > 0:
         return _[0][0]
+
+def create_test_user(userName,
+                     realName,
+                     address):
+
+    p = phdb(db='phabricator_user',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    newphid = gen_user_phid()
+    passwordSalt = 'xxxxxx'
+    passwordHash = 'bcrypt:xxxxx'
+    dateCreated = int(time.time())
+    dateModified = int(time.time())
+    import random
+    conduitCertificate = str(random.random()).split('.')[1]
+    accountSecret = str(random.random()).split('.')[1]
+
+    p.sql_x("INSERT INTO user \
+                 (phid, \
+                  userName, \
+                  realName, \
+                  passwordSalt, \
+                  passwordHash, \
+                  consoleEnabled, \
+                  consoleVisible, \
+                  conduitCertificate, \
+                  isSystemAgent, \
+                  isDisabled, \
+                  isAdmin, \
+                  isEmailVerified, \
+                  isApproved, \
+                  accountSecret, \
+                  isEnrolledInMultiFactor, \
+                  consoleTab, \
+                  timezoneIdentifier, \
+                  dateCreated, \
+                  dateModified) \
+                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                  (newphid,
+                  userName,
+                  realName,
+                  passwordSalt,
+                  passwordHash,
+                  0,
+                  0,
+                  conduitCertificate,
+                  0,
+                  0,
+                  0,
+                  1,
+                  1,
+                  accountSecret,
+                  0,
+                  '',
+                  '',
+                  dateCreated,
+                  dateModified))
+
+    p.sql_x("INSERT INTO user_email \
+                 (userPHID, \
+                  address, \
+                  isVerified, \
+                  isPrimary, \
+                  verificationCode, \
+                  dateCreated, \
+                  dateModified) \
+                  VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                  (newphid,
+                   address,
+                   1,
+                   1,
+                   accountSecret,
+                   dateCreated,
+                   dateModified))
+    p.close()
 
 def set_task_title_transaction(taskphid,
                                authorphid,
@@ -607,10 +682,8 @@ def get_user_relations():
     return _
 
 def get_verified_user(email):
-    """ check if email is verified
-    :param email: str
-    """
     phid, email, is_verified = get_user_email_info(email)
+    #log("Single specified user: %s, %s, %s" % (phid, email, is_verified))
     if is_verified:
         return [(phid, email)]
     else:
@@ -645,12 +718,7 @@ def get_user_email_info(emailaddress):
     return _[0] or ''
 
 def get_verified_users(modtime, limit=None):
-    """return verified user emails since modtime with 
-    last time seen
-    :param modtime: epoch str
-    :param limit: int
-    :returns: tuple
-    """
+    #Find the task in new Phabricator that matches our lookup
     verified = get_verified_emails(modtime=modtime, limit=limit)
     create_times = [v[2] for v in verified]
     try:
@@ -660,11 +728,6 @@ def get_verified_users(modtime, limit=None):
     return verified, newest
 
 def get_verified_emails(modtime=0, limit=None):
-    """ get verified emails by modtime
-    :param modtime: epoch str
-    :param limit: int
-    :returns: list
-    """
     p = phdb(db='phabricator_user',
              user=phuser_user,
              passwd=phuser_passwd)
