@@ -3,7 +3,8 @@ path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('/'.join(path.split('/')[:-1]))
 from wmfphablib import phabdb
 from wmfphablib import util
-print util.remove_issue_by_bugid(sys.argv[1], 'bz')
+
+print util.remove_issue_by_bugid(sys.argv[1], 'rt')
 exit()
 
 email_tuples =  phabdb.get_verified_emails()
@@ -13,11 +14,11 @@ exit()
 print phabdb.set_tasks_blocked('PHID-TASK-llxzmfbbcc4adujigg4w', 'PHID-TASK-cjibddnd5lsa5n5hdsyx')
 
 #print phabdb.get_blocking_tasks('PHID-TASK-llxzmfbbcc4adujigg4w')
-#print phabdb.phid_by_custom_field('fl562')
+#print phabdb.phid_by_custom_field('fl563')
 print 'email', phabdb.email_by_userphid('PHID-USER-nnipdbdictreyx7qhaii')
 
 #get the comment transactions by task
-coms =  phabdb.comment_transactions_by_task_phid('PHID-TASK-3eivod3do2vzdviblbfr')
+coms =  phabdb.comment_transactions_by_task_phid('PHID-TASK-3eivod3do3vzdviblbfr')
 
 final_comments = {}
 for i, c in enumerate(coms):
