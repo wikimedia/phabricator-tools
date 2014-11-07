@@ -9,17 +9,11 @@ def sanitize_project_name(product, component):
     :param component: str
     """
     component_separator = '-'
-    #product = product.replace('-', '_')
-    #component = component.replace('-', '_')
-    #component = component.replace(' ', '_')
-
     product = re.sub('\s', '-', product)
     product = product.replace('_', '-')
-
     component = re.sub('\s', '-', component)
     component = component.replace('_', '-')
     component = component.replace('/', '-or-')
-
     return  "%s%s%s" % (product,
                          component_separator,
                          component)

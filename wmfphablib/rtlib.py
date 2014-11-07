@@ -1,3 +1,6 @@
+enabled = ['codfw', 'ulsfo', 'pmtpa', 'ops-requests', 'network', 'esams', 'eqiad',
+                'core-ops',]
+
 import util
 try:
     from rtppl import ppl as users
@@ -9,9 +12,21 @@ from datetime import datetime
 
 prepend = 'rt'
 
+def project_translate(pname):
+    projs = {'core-ops': 'ops-core',
+             'network': 'ops-network',
+             'codfw':   'ops-codfw',
+             'ulsfo':   'ops-ulsfo',
+             'pmtpa':   'ops-pmtpa',
+             'ops-requests': 'ops-request',
+             'esams':   'ops-esams',
+             'eqiad':   'ops-eqiad',
+             'maint-announce':   'maint-announce'}
+    return projs[pname]
+
 def user_lookup(name):
     """ match user name in rt to user email"""
-    return users.get(name, None)
+    return users.get(name, None) or name
 
 def shadow_emails(text):
     emails =  re.findall('([^@|\s]+@[^@]+\.[^@|\s]+)', text)
@@ -44,7 +59,7 @@ def status_convert(status):
     statuses = { 'resolved': 'resolved',
                  'new': 'open',
                  'open': 'open',
-                 'stalled': 'needs_info'}
+                 'stalled': 'needsinfo'}
     return statuses[status.lower()]
 
 def links_to_dict(link_text):
@@ -88,4 +103,9 @@ def links_to_dict(link_text):
 def str_to_epoch(rt_style_date_str):
     """ RT stores things as 'Fri Aug 15 19:45:51 2014' """
     date = datetime.strptime(rt_style_date_str, '%a %b %d %H:%M:%S %Y')
+    return int(float(util.datetime_to_epoch(date)))
+
+def str_to_epoch_comments(rt_style_date_str):
+    """ RT stores things as '2014-08-21 21:22:00' """
+    date = datetime.strptime(rt_style_date_str, "%Y-%m-%d %H:%M:%S")
     return int(float(util.datetime_to_epoch(date)))
