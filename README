@@ -1,5 +1,13 @@
 These tools are all oriented towards migration of external data sources to phab.
 
+This repo will eventually be used for tooling surrounding
+development in phabricator and related tools.
+
+For the moment it is being used to house migration scripts
+and associated logic.
+
+Everything here is a work in progress.
+
 Preflight check for migrations:
 
     set up security group
@@ -16,20 +24,16 @@ IMPORTANT:
     * bot user must be a member of importbots group
     * /etc/phabtools.conf must exist
 
-This repo will eventually be used for tooling surrounding
-development in phabricator and related tools.
-
-For the moment it is being used to house migration scripts
-and associated logic.
-
-Everything here is a work in progress.
+OPTIONAL:
+    * loading a list of "fake" people for testing can be
+     done for RT why haveing a dict of users in rtppl.py
+     via test/loadrtppl.py
+        ppl = {"test": "test@wikimedia.org"}
 
 This repo makes use of the following packages:
 
-https://github.com/disqus/python-phabricator
-https://github.com/z4r/python-rtkit
-https://github.com/chasemp/python-rtkit.git
-
+python-phabricator
+python-rtkit
 python-mysqldb
 
 Notes on DB Schema for migration:
@@ -129,3 +133,7 @@ https://bugzilla.wikimedia.org/show_bug.cgi?id=19991 has 5
 BZ attachment since deleted:
 
 https://bugzilla.wikimedia.org/show_bug.cgi?id=2 has 1
+
+RT ISSUES:
+
+https://rt.wikimedia.org/Ticket/Display.html?id=8175
