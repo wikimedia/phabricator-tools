@@ -238,8 +238,13 @@ def create(rtid):
         upload = phabm.upload_file("%s.%s" % (v[0], file_extension), sanscontent)
         uploaded[k] = upload
 
+    if rtinfo['Queue'] not in rtlib.enabled:
+        log("%s not in an enabled queue" % (rtid,))
+        return True
+
     ptags = []
-    ptags.append(rtinfo['Queue'])
+    pname = rtlib.project_translate(rtinfo['Queue'])
+    ptags.append(pname)
 
     phids = []
     for p in ptags:
@@ -285,23 +290,26 @@ def create(rtid):
                                         priority=rtinfo['xpriority'],
                                         auxiliary={"std:maniphest:external_reference":"rt%s" % (rtid,),
                                                    "std:maniphest:security_topic":"%s" % ('none')})
+    # XXX: perms
+    botphid = phabdb.get_phid_by_username(config.phab_user)
+    phabdb.set_task_title_transaction(ticket['phid'],
+                                      botphid,
+                                      'public',
+                                      'public')
 
     phabdb.set_task_ctime(ticket['phid'], rtlib.str_to_epoch(rtinfo['Created']))
 
     vlog(str(ordered_comments))
+    fmt_comments = {}
     for comment, contents in comment_dict.iteritems():
+        fmt_comment = {}
         dbody = contents['body']
-
+        print dbody
         if dbody['content'] is None and dbody['creator'] is None:
             continue
         elif dbody['content'] is None:
             content = 'no content found'
         else:
-            # peel off email signatures
-            #if 'Forwarded message' in dbody['content'][0]:
-            #    nosig = rtlib.shadow_emails(dbody['content'][0])
-            #else:
-            #nosig = remove_sig(dbody['content'][0])
             mailsan = rtlib.shadow_emails(dbody['content'][0])
             content_literal = []
             for c in mailsan.splitlines():
@@ -328,20 +336,11 @@ def create(rtid):
             vlog("ignoring comment: %s/%s" % (dbody['description'], content))
             continue
 
-        #cbody = "`%s`" % (dbody['description'],)
-        #cbody += '\n________________\n'
-
-        #if dbody['creator'] == 'RT_System':
-        #else:
-        #    cbody = "`%s`\n" % (dbody['description'],)
-        #cbody = "**%s** on `%s`\n\n**Description**: %s\n **Message**: %s\n" % (dbody['creator'],
-        #                                  dbody['created'],
-        #                                  content or 'no message')
-
+        preamble = ''
         cbody = ''
         if content:
-            cbody += "`%s  wrote:`\n" % (dbody['creator'].strip(),)
-            cbody += "\n%s" % (content.strip() or 'no content',)
+            preamble += "`%s  wrote:`\n\n" % (dbody['creator'].strip(),)
+            cbody += "%s" % (content.strip() or 'no content',)
 
         
         if dbody['nvalue'] or dbody['ovalue']:
@@ -358,37 +357,12 @@ def create(rtid):
             states = ['open', 'resolved', 'new', 'stalled']
             if any(map(lambda x: x in dbody['description'], relations)):
                 value_update = value_update_text
-            #    value_update = dbody['description'].replace('fsck.com-rt', 'https')
-
-            #    value_update += "%s added reference %s" % (dbody['creator'], ref)
-            #elif 'Dependency by' in dbody['description']:
-            #    value_update = dbody['description'].strip()
-            #    ref = dbody['nvalue'].replace('fsck.com-rt', 'https')
-            #    value_update = "%s added depended on by %s" % (dbody['creator'], ref)
-
             elif re.search('tags\s\S+\sadded', dbody['description']):
                 value_update = "%s added tag %s" % (dbody['creator'], dbody['nvalue'])
             elif re.search('Taken\sby\s\S+', dbody['description']):
                 value_update = "Issue taken by **%s**" % (dbody['creator'],)
-            #elif dbody['nvalue'].strip() or dbody['ovalue'].strip() in states:
-            #    print "FOUND IN STATES", dbody['nvalue'], dbody['ovalue']
-            #    value_update = "\n**%s** updated values: " % (dbody['creator'],)
-            #    value_update += "|**%s** | => |**%s**|" % (dbody['ovalue'] or 'none',
-            #                                               dbody['nvalue'] or 'none')
             else:
                 value_update = "//%s//" % (value_update_text,)
-
-            #elif dbody['ovalue'].isdigit() and dbody['nvalue'].isdigit():
-            #    value_update = "//%s//" % (value_update_text,)
-            #elif not dbody['ovalue'].strip() and dbody['nvalue'].isdigit():
-            #    value_update = "//%s//" % (value_update_text,)
-            #elif not dbody['nvalue'].strip() and dbody['ovalue'].isdigit():
-            #    value_update = "//%s//" % (value_update_text,)
-            #else:
-            #    print dbody['description']
-            #    value_update = "\n**%s** updated values: " % (dbody['creator'],)
-            #    value_update += "|**%s** | => |**%s**|" % (dbody['ovalue'] or 'none',
-            #                                               dbody['nvalue'] or 'none')
             cbody += value_update
 
         afound = contents['body']['attached']
@@ -399,13 +373,31 @@ def create(rtid):
         if cbody_attachments:
             cbody += '\n__________________________\n\n'
             cbody += '\n'.join(cbody_attachments)
-        phabm.task_comment(ticket['id'], cbody)
+            fmt_comment['xattached'] = cbody_attachments
+        phabm.task_comment(ticket['id'], preamble + cbody)
+        ctransaction = phabdb.last_comment(ticket['phid'])
+        created = rtlib.str_to_epoch_comments(dbody['created'])
+        phabdb.set_comment_time(ctransaction,
+                                created)
+        fmt_comment['xctransaction'] = ctransaction
+        fmt_comment['preamble'] = preamble
+        fmt_comment['content'] = cbody
+        fmt_comment['created'] = created
+        # XXX TRX both ways?
+        #fmt_comment['creator'] = dbody['creator']user_lookup(name)
+        fmt_comments[created] = fmt_comment
 
     if rtinfo['Status'].lower() != 'open':
         log('setting %s to status %s' % (rtid, rtinfo['xstatus'].lower()))
         phabdb.set_issue_status(ticket['phid'], rtinfo['xstatus'].lower())
+
+
     log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
     phabdb.set_task_mtime(ticket['phid'], rtlib.str_to_epoch(rtinfo['LastUpdated']))
+    xcomments = json.dumps(fmt_comments)
+    pmig.sql_x("UPDATE rt_meta SET xcomments=%s WHERE id = %s", (xcomments, rtid))
+    pmig.sql_x("UPDATE rt_meta SET priority=%s, modified=%s WHERE id = %s",
+               (ipriority['creation_success'], now(), rtid))
     pmig.close()
     return True
 
@@ -419,7 +411,7 @@ def run_create(rtid, tries=1):
                                       (rtid,))
         if import_priority:
             pmig.sql_x("UPDATE rt_meta \
-                       SET priority=%s modified=%s \
+                       SET priority=%s, modified=%s \
                        WHERE id = %s",
                        (ipriority['creation_failed'],
                        now(),
@@ -442,7 +434,7 @@ def run_create(rtid, tries=1):
 def main():
 
     if not util.can_edit_ref:
-        elog('%s reference field not editable on this install' % (bugid,))
+        elog('%s reference field not editable on this install' % (rtid,))
         sys.exit(1)
 
     pmig = phdb(db=config.rtmigrate_db)
@@ -452,7 +444,7 @@ def main():
     #Serious business
     if 'failed' in sys.argv:
         for b in bugs:
-            notice("Removing bugid %s" % (b,))
+            notice("Removing rtid %s" % (b,))
             log(util.remove_issue_by_bugid(b, bzlib.prepend))
 
     from multiprocessing import Pool
