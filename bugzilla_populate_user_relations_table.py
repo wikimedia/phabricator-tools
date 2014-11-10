@@ -3,6 +3,7 @@ import time
 import json
 import multiprocessing
 import sys
+import yaml
 import collections
 from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
@@ -38,12 +39,23 @@ def populate(bugid):
         log('%s not present for migration' % (bugid,))
         return True
 
+    bzdata = open("data/bugzilla.yaml", 'r')
+    bzdata_yaml = yaml.load(bzdata)
+    mlists = bzdata_yaml['assigned_to_lists'].split(' ')
+    vlog(mlists)
     header = json.loads(buginfo)
     vlog(str(header))
     relations = {}
     relations['author'] = header["creator"]
     relations['cc'] = header['cc']
-    relations['owner'] = header['assigned_to']
+
+    if header['assigned_to'] not in mlists:
+        vlog("adding assignee %s to %s" % (header['assigned_to'], bugid))
+        relations['owner'] = header['assigned_to']
+    else:
+        vlog("skipping %s assigned to %s" % (bugid, header['assigned_to']))
+        relations['owner'] = ''
+
 
     for k, v in relations.iteritems():
         if relations[k]:
