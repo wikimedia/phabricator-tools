@@ -22,6 +22,9 @@ def build_comment(c):
     """ takes a native bz comment dict and outputs
     a dict ready for processing into phab
     """
+
+    dupe_literals = ['This bug has been marked as a duplicate of bug',
+                     'has been marked as a duplicate of this bug']
     clean_c = {}
     clean_c['author'] =  c['author'].split('@')[0]
     clean_c['creation_time'] = str(c['creation_time'])
@@ -45,7 +48,7 @@ def build_comment(c):
     for t in text:
         if t.startswith('Created attachment'):
             continue
-        elif t.startswith('***'):
+        elif '***' in t and any(map(lambda l: l in t, dupe_literals)):
             fmt_text.append('%%%{0}%%%'.format(t))
         else:               
             fmt_text.append(t)

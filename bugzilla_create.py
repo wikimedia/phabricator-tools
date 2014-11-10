@@ -235,7 +235,7 @@ def create(bugid):
         ccphids.append(mailinglist_phid(assignee))
 
     vlog("Ticket Info: %s" % (desc_block,))
-    ticket =  phab.maniphest.createtask(title=buginfo['summary'],
+    ticket = phab.maniphest.createtask(title=buginfo['summary'],
                                  description=full_description,
                                  projectPHIDs=phids,
                                  ccPHIDs=ccphids,
