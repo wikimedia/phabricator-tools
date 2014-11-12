@@ -130,7 +130,7 @@ def create(bugid):
             d.write(str(json.dumps(buginfo)))
 
     if buginfo['status'].lower() == 'patch_to_review':
-        ptags.append(('patch_to_review', 'tags', 'green'))
+        ptags.append(('Patch-For-Review', 'tags', 'green'))
 
     if buginfo['status'] == 'verified':
         ptags.append(('verified', 'tags'))
