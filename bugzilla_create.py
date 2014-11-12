@@ -132,7 +132,7 @@ def create(bugid):
     if buginfo['status'].lower() == 'patch_to_review':
         ptags.append(('patch_to_review', 'tags', 'green'))
 
-    if buginfo['status'] == 'verified':
+    if buginfo['status'].lower() == 'verified':
         ptags.append(('verified', 'tags'))
 
     if buginfo['cf_browser'] not in ['---', "Other"]:
