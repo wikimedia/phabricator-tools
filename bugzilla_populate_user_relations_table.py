@@ -155,7 +155,7 @@ def populate(bugid):
 
 def run_populate(bugid, tries=1):
     if tries == 0:
-        elog('failed to populate for %s' % (bugid,))
+        elog('user relations failed to populate for %s' % (bugid,))
         return False
     try:
         return populate(bugid)
@@ -164,7 +164,7 @@ def run_populate(bugid, tries=1):
         tries -= 1
         time.sleep(5)
         traceback.print_exc(file=sys.stdout)
-        elog('failed to populate %s (%s)' % (bugid, e))
+        elog('user relations failed to populate %s (%s)' % (bugid, e))
         return run_populate(bugid, tries=tries)
 
 def main():

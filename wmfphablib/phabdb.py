@@ -44,6 +44,23 @@ def get_user_relations_comments_last_finish(dbcon):
     except:
         return 1
 
+def get_issues_by_priority(dbcon, priority):
+    """ get failed creations
+    :param dbcon: db connector
+    :param priority: int
+    :returns: list
+    """
+    _ = dbcon.sql_x("SELECT id \
+                    from bugzilla_meta \
+                    where priority=%s",
+                    (priority,),
+                    limit=None)
+    if _ is None:
+        return
+    f_ = list(util.tflatten(_))
+    if f_:
+        return f_
+
 def get_failed_creations(dbcon):
     """ get failed creations
     :param dbcon: db connector
@@ -350,6 +367,7 @@ def set_task_mtime(taskphid, mtime):
              (mtime, taskphid))
     p.close()
 
+
 def set_task_ctime(taskphid, ctime):
     """set manual epoch ctime for task
     :param taskphid: str
@@ -364,6 +382,33 @@ def set_task_ctime(taskphid, ctime):
     titlexphid = get_task_title_transaction(taskphid)
     set_transaction_time(titlexphid, ctime)
 
+    p.close()
+
+def get_task_description(taskphid):
+    """get task description
+    :param taskphid: str
+    """
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    _ = p.sql_x("SELECT description \
+                 from maniphest_task \
+                 WHERE phid=%s", (phid,))
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
+def set_task_description(taskphid, text):
+    """set task description
+    :param taskphid: str
+    :param mtime: int of modtime
+    """
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    p.sql_x("UPDATE maniphest_task \
+             SET description=%s \
+             WHERE phid=%s", (text, taskphid))
     p.close()
 
 def get_emails(modtime=0):
@@ -894,6 +939,24 @@ def set_project_policy(projphid, view, edit):
                               projphid))
     p.close()
 
+def set_project_policy(projphid, view, edit):
+    """set a project as view policy
+    :param projphid: str
+    :param view: str
+    :param edit: str
+    """
+    p = phdb(db='phabricator_project',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    p.sql_x("UPDATE project \
+             SET viewPolicy=%s, \
+             editPolicy=%s \
+             WHERE phid=%s", (view,
+                              edit,
+                              projphid))
+    p.close()
+
 def get_project_phid(project):
     p = phdb(db='phabricator_project',
              user=phuser_user,
@@ -1007,8 +1070,8 @@ def set_task_subscriber(taskphid, userphid):
 
 class phdb:
     def __init__(self, host = dbhost,
-                       user = "root",
-                       passwd = "labspass",
+                       user = phuser_user,
+                       passwd = phuser_passwd,
                        db = "phab_migration",
                        charset = 'utf8',):
 

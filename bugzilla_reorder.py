@@ -35,6 +35,7 @@ def reorder(first, start, end, placeholder=300001):
         print "placeholder %s not empty (%s)" % (placeholder, pphid)
         return 
 
+
     for t in issues:
         print "Reassigning reference: %s to %s" % (t, newid)
         # Find PHID of the first ticket in our lineup

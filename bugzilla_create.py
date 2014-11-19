@@ -60,7 +60,7 @@ def create(bugid):
 
     if get_ref(bugid):
         log('reference ticket %s already exists' % (bugid,))
-        #return True
+        return True
 
     buginfo = json.loads(buginfo)
     com = json.loads(com)
@@ -102,15 +102,26 @@ def create(bugid):
     #process ticket uploads to map attach id to phab file id
     uploads = {}
     for a in attached:
-        if a['is_private']:
-            continue
         vlog("processing bz attachment %s" % (str(a)))
+        if a['is_private']:
+            vlog('ignoring private attachment: %s' %  (str(a)))
+            a['ignore'] = 'private'
+        elif a['is_obsolete'] == 1:
+            vlog('ignoring obsolete attachment: %s' %  (str(a)))
+            a['ignore'] = 'obsolete'
+        else:
+            try:
+                upload = phabm.upload_file(a['file_name'], a['data'].data)
+                a['phid'] = upload['phid']
+                a['name'] = upload['name']
+                a['objectName'] = upload['objectName']
+            except Exception as e:
+                 print "\n%s ATTACHMENT CORRUPTED -- %s\n" % (str(bugid), str(a))
+                 print "%s --" % (str(e))
+                 a['ignore'] = 'corrupt on retrieval'
 
-        upload = phabm.upload_file(a['file_name'], a['data'].data)
-        a['phid'] = upload['phid']
-        a['name'] = upload['name']
-        a['objectName'] = upload['objectName']
         uploads[a['id']] = a
+
     log('%s attachment count: %s' % (bugid, str(len(uploads.keys()))))
     vlog("phab upload details: %s" % (str(uploads)))
 
@@ -123,6 +134,7 @@ def create(bugid):
     # Convert bugzilla source to phabricator
     buginfo['status'] = bzlib.status_convert(buginfo['status'],
                                              buginfo['resolution'])
+
     buginfo['priority'] = bzlib.priority_convert(buginfo['priority'])
 
     if '-d' in sys.argv:
@@ -130,9 +142,9 @@ def create(bugid):
             d.write(str(json.dumps(buginfo)))
 
     if buginfo['status'].lower() == 'patch_to_review':
-        ptags.append(('Patch-For-Review', 'tags', 'green'))
+        ptags.append(('patch_to_review', 'tags', 'green'))
 
-    if buginfo['status'].lower() == 'verified':
+    if buginfo['status'] == 'verified':
         ptags.append(('verified', 'tags'))
 
     if buginfo['cf_browser'] not in ['---', "Other"]:
@@ -163,9 +175,18 @@ def create(bugid):
 
     log('project: ' + buginfo['project'])
 
-    # strip out comment 0 as description
-    description = clean_com[0]
-    del clean_com[0]
+    try:
+        # strip out comment 0 as description
+        description = clean_com[0]
+        del clean_com[0]
+    except IndexError:
+        log("%s has no comment 0" % (str(bugid)))
+        # some random tasks were created at a point in bugzilla
+        # history with metadata but no comment 0
+        # https://bugzilla.wikimedia.org/show_bug.cgi?id=32056
+        description = {'author': buginfo['creator'].split('@')[0],
+                       'text': '//this issue has no description//',
+                       'creation_time': buginfo['creation_time']}
 
     created = epoch_to_datetime(description['creation_time'])
     desc_block = "**Author:** `%s`\n\n**Description:**\n%s\n" % (description['author'],
@@ -191,12 +212,21 @@ def create(bugid):
     if buginfo['see_also']:
         desc_tail += "\n**See Also**:\n%s" % ('\n'.join(buginfo['see_also']))
 
+    attachments = ''
     if 'attachment' in description:
         attached = int(description['attachment'])
         if attached in uploads:
             cattached = uploads[int(description['attachment'])]
-            desc_tail += "\n\n**Attached**: {%s}" % (cattached['objectName'])
+            if 'objectName' in cattached:
+               attachments = "\n\n**Attached**: {%s}" % (cattached['objectName'])
 
+            if 'ignore' in cattached:
+                attachments = "\n\n//attachment %s ignored as %s//" % (cattached['file_name'],
+                                                                       cattached['ignore'])
+        else:
+            attachments = "\n\n//attachment missing in source//"
+
+    desc_tail += attachments
     full_description = desc_block + '\n' + desc_tail
 
     keys = buginfo['keywords']
@@ -234,14 +264,14 @@ def create(bugid):
     if assignee in mlists:
         ccphids.append(mailinglist_phid(assignee))
 
+    # viewPolicy = buginfo['viewPolicy'],
+    # editPolicy = buginfo['editPolicy'],
     vlog("Ticket Info: %s" % (desc_block,))
     ticket = phab.maniphest.createtask(title=buginfo['summary'],
                                  description=full_description,
                                  projectPHIDs=phids,
                                  ccPHIDs=ccphids,
                                  priority=buginfo['priority'],
-                                 viewPolicy = buginfo['viewPolicy'],
-                                 editPolicy = buginfo['editPolicy'],
                                  auxiliary={"std:maniphest:external_reference":"bz%s" % (bugid,),
                                             "std:maniphest:security_topic":"%s" % (buginfo["secstate"],)})
 
@@ -264,16 +294,20 @@ def create(bugid):
         attachments = ''
         if 'attachment' in c:
             attached = int(c['attachment'])
-            #some comments match the attachment regex but the attachment was deleted
-            # by an admin from bugzilla and so is now missing.
-            if attached not in uploads:
-                attachments += "\n\n //attachment %s missing in source//" % (attached,)
-            else:
+            if attached in uploads:
                 cattached = uploads[int(c['attachment'])]
-                attachments += "\n\n**Attached**: {%s}" % (cattached['objectName'])
+                if 'objectName' in cattached:
+                    attachments += "\n\n**Attached**: {%s}" % (cattached['objectName'])
+
+                if 'ignore' in cattached:
+                    attachments += "\n\n//attachment %s ignored as %s//" % (cattached['file_name'],
+                                                                          cattached['ignore'])
+            else:
+                attachments += "\n\n//attachment missing in source//"
         fmt_comment['xpreamble'] = comment_header
         fmt_comment['xattached'] = attachments
-        phabm.task_comment(ticket['id'], comment_header + comment_body + attachments)
+        phabm.task_comment(ticket['id'],
+                           comment_header + comment_body + attachments)
         ctransaction = phabdb.last_comment(ticket['phid'])
         phabdb.set_comment_time(ctransaction, c['creation_time'])
         fmt_comment['xctransaction'] = ctransaction
@@ -283,10 +317,13 @@ def create(bugid):
         log("setting status for T%s to %s" % (ticket['id'], buginfo['status']))
         phabdb.set_issue_status(ticket['phid'], buginfo['status'])
 
-    phabdb.set_task_mtime(ticket['phid'], int(buginfo['last_change_time'].split('.')[0]))
+    phabdb.set_task_mtime(ticket['phid'],
+                          int(buginfo['last_change_time'].split('.')[0]))
     xcomments = json.dumps(fmt_comments)
-    pmig.sql_x("UPDATE bugzilla_meta SET xcomments=%s WHERE id = %s", (xcomments, bugid))
-    pmig.sql_x("UPDATE bugzilla_meta SET priority=%s, modified=%s WHERE id = %s",
+    pmig.sql_x("UPDATE bugzilla_meta \
+                SET xcomments=%s WHERE id = %s", (xcomments, bugid))
+    pmig.sql_x("UPDATE bugzilla_meta \
+                SET priority=%s, modified=%s WHERE id = %s",
                (ipriority['creation_success'], now(), bugid))
     pmig.close()
     return True
@@ -295,10 +332,14 @@ def create(bugid):
 def run_create(bugid, tries=1):
     if tries == 0:
         pmig = phabdb.phdb(db=config.bzmigrate_db)
-        import_priority = pmig.sql_x("SELECT priority FROM bugzilla_meta WHERE id = %s", (bugid,))
+        import_priority = pmig.sql_x("SELECT priority \
+                                      FROM bugzilla_meta \
+                                      WHERE id = %s", (bugid,))
         if import_priority:
-            pmig.sql_x("UPDATE bugzilla_meta SET priority=%s WHERE id = %s", (ipriority['creation_failed'],
-                                                                              bugid))
+            pmig.sql_x("UPDATE bugzilla_meta \
+                        SET priority=%s \
+                        WHERE id = %s", (ipriority['creation_failed'],
+                                         bugid))
         else:
             elog("%s does not seem to exist" % (bugid))
         pmig.close()
@@ -316,19 +357,27 @@ def run_create(bugid, tries=1):
 
 def main():
 
+    def remove(bugid):
+        notice("Removing bugid %s" % (bugid,))
+        log(util.remove_issue_by_bugid(bugid, bzlib.prepend))
+
     if not util.can_edit_ref:
         elog('%s reference field not editable on this install' % (bugid,))
         sys.exit(1)
 
+    if 'failed' in sys.argv:
+        priority = ipriority['creation_failed']
+    else:
+        priority = 0
+
     pmig = phdb(db=config.bzmigrate_db)
-    bugs = return_bug_list(dbcon=pmig)
+    bugs = return_bug_list(dbcon=pmig, priority=priority)
     pmig.close()
 
     #Serious business
-    if 'failed' in sys.argv:
+    if 'failed' in sys.argv or '-r' in sys.argv:
         for b in bugs:
-            notice("Removing bugid %s" % (b,))
-            log(util.remove_issue_by_bugid(b, bzlib.prepend))
+            remove(b)
 
     from multiprocessing import Pool
     pool = Pool(processes=int(config.bz_createmulti))

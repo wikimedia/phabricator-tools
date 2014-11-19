@@ -10,11 +10,11 @@ from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import phabdb
 from wmfphablib import log
+from wmfphablib import util
+from wmfphablib import bzlib
+from wmfphablib import config
 from wmfphablib import vlog
 from wmfphablib import errorlog as elog
-from wmfphablib import bzlib
-from wmfphablib import util
-from wmfphablib import config
 from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
 from wmfphablib import now
@@ -28,10 +28,9 @@ def update(user):
                        config.phab_cert,
                        config.phab_host)
 
-    pmig = phabdb.phdb(host=config.dbhost,
-                       db=config.bzmigrate_db,
-                       user=config.bzmigrate_user,
-                       passwd=config.bzmigrate_passwd)
+    pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
 
     phabm = phabmacros('', '', '')
     phabm.con = phab
@@ -40,51 +39,50 @@ def update(user):
         log("%s is a bot no action" % (user['user']))
         return True
 
-    epriority = phabdb.get_user_relations_priority(user['user'], pmig)
+    epriority = phabdb.get_user_relations_comments_priority(user['user'], pmig)
     if epriority and len(epriority[0]) > 0:
         if epriority[0][0] == ipriority['update_success']:
             log('Skipping %s as already updated' % (user['user']))
-            return True
+            #return True
 
-    # 'author': [409, 410, 411, 404, 412],
-    # 'cc': [221, 69, 203, 268, 261, 8],
-    # 'created': 1410276037L,
-    # 'modified': 1410276060L,
-    # 'assigned': [97, 64, 150, 59, 6],
-    # 'userphid': 'PHID-USER-4hsexplytovmqmcb7tq2',
-    # 'user': u'chase.mp@xxx.com'}
+    if not user['issues']:
+        log("%s has no issues to update" % (user['user'],))
+        return True
 
-    if user['assigned']:
-        for ag in user['assigned']:
-             vlog(phabm.sync_assigned(user['userphid'], ag, bzlib.prepend))
+    for i in user['issues']:
+        comdetails = pmig.sql_x("SELECT comments, xcomments FROM bugzilla_meta WHERE id = %s", (int(i),))
+        jcom, jxcom = comdetails[0]
+        coms = json.loads(jcom)
+        xcoms = json.loads(jxcom)
 
-    if user['author']:
-        for a in user['author']:
-            vlog(phabm.synced_authored(user['userphid'], a, bzlib.prepend))
+        for key, xi in xcoms.iteritems():
+            com = coms[util.get_index(coms, "count", int(key))]
+            content = com['text']
+            if com["creator"] == user['user']:
+                log("Updating comment %s for %s" % (xi['xctransaction'], user['user']))
+                phabdb.set_comment_author(xi['xctransaction'], user['userphid'])
+                phabdb.set_comment_content(xi['xctransaction'], content + xi['xattached'])
 
-    if user['cc']:
-        for ccd in user['cc']:
-            vlog(phabdb.add_task_cc_by_ref(user['userphid'], ccd, bzlib.prepend))
-
-    current = phabdb.get_user_migration_history(user['user'], pmig)
+    current = phabdb.get_user_migration_comment_history(user['user'], pmig)
     if current:
-        log(phabdb.set_user_relations_priority(ipriority['update_success'], user['user'], pmig))
+        log(phabdb.set_user_relations_comments_priority(ipriority['update_success'], user['user'], pmig))
     else:
-        elog('%s user does not exist to update' % (user['user']))
+        log('%s user does not exist to update' % (user['user']))
         return False
     pmig.close()
+    log(util.purge_cache())
     return True
 
 def run_update(user, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb(db=config.bzmigrate_db,
-                       user=config.bzmigrate_user,
-                       passwd=config.bzmigrate_passwd)
+        pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
         current = phabdb.get_user_migration_history(user['user'], pmig)
         if current:
-           elog(phabdb.set_user_relations_priority(ipriority['update_failed'], user['user'], pmig))
+           log(phabdb.set_user_relations_priority(ipriority['update_failed'], user['user'], pmig))
         else:
-            elog('%s user does not exist to update' % (user['user']))
+            log('%s user does not exist to update' % (user['user']))
         pmig.close()
         elog('final fail to update %s' % (user['user'],))
         return False
@@ -100,13 +98,13 @@ def run_update(user, tries=1):
 
 def get_user_histories(verified):
     histories = []
-    pmig = phabdb.phdb(db=config.bzmigrate_db,
-                       user=config.bzmigrate_user,
-                       passwd=config.bzmigrate_passwd)
+    pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
 
     for v in verified:
         vlog(str(v))
-        saved_history = phabdb.get_user_migration_history(v[1], pmig)
+        saved_history = phabdb.get_user_migration_comment_history(v[1], pmig)
         if not saved_history:
             log('%s verified email has no saved history' % (v[1],))
             continue
@@ -114,12 +112,11 @@ def get_user_histories(verified):
         history = {}
         history['user'] = v[1]
         history['userphid'] = v[0]
-        history['assigned'] = saved_history[0]
-        history['cc'] = saved_history[1]
-        history['author'] = saved_history[2]
-        history['created'] = saved_history[3]
-        history['modified'] = saved_history[4]
+        history['issues'] = saved_history[0]
+        history['created'] = saved_history[1]
+        history['modified'] = saved_history[2]
         histories.append(history)
+
     pmig.close()
     return [util.translate_json_dict_items(d) for d in histories]
 
@@ -132,12 +129,12 @@ def main():
     parser.add_argument('-v', action="store_true", default=False)
     args =  parser.parse_args()
 
-    pmig = phabdb.phdb(db=config.bzmigrate_db,
-                       user=config.bzmigrate_user,
-                       passwd=config.bzmigrate_passwd)
+    pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
 
     if args.a:
-        starting_epoch = phabdb.get_user_relations_last_finish(pmig)
+        starting_epoch = phabdb.get_user_relations_comments_last_finish(pmig)
         users, finish_epoch = phabdb.get_verified_users(starting_epoch, config.bz_updatelimit)
     elif args.email:
         users = phabdb.get_verified_user(args.email)
@@ -160,12 +157,8 @@ def main():
     icounts = []
     for u in histories:
         c = 0
-        if u['cc']:
-            c += len(u['cc'])
-        if u['author']:
-            c += len(u['author'])
-        if u['assigned']:
-            c += len(u['assigned'])
+        if u['issues']:
+            c += len(u['issues'])
         icounts.append(c)
     issue_count = sum(icounts)
 
@@ -183,6 +176,7 @@ def main():
 
 
     from multiprocessing import Pool
+
     pool = Pool(processes=int(config.bz_updatemulti))
     _ =  pool.map(run_update, histories)
     complete = len(filter(bool, _))
@@ -194,9 +188,11 @@ def main():
                                  complete,
                                  failed,
                                  pmig)
-    pmig.close()
+
     pm = phabmacros(config.phab_user, config.phab_cert, config.phab_host)
     vlog(util.update_blog(source, complete, failed, user_count, issue_count, pm))
+
+    pmig.close()
     print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
 
 if __name__ == '__main__':

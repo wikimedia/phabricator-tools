@@ -12,12 +12,14 @@ Preflight check for migrations:
 
     set up security group
     set up security herald rule
-    make sure mailing lists are in place
-    make sure ext ref key is editable
+    -- make sure ext ref key is editable --
+    -- make sure icons are excluded
     make sure bot is in security group
-    ensure mysql file size
+    ensure file size (mysql / php)
     bot creation
+    set up hosts file entry for db on main (dns is slow)
     update /etc/phabtools
+
 
 IMPORTANT:
 
@@ -99,10 +101,10 @@ CREATE TABLE user_relations_comments
 );
 
 
-create table user_relations_jobs
+CREATE table user_relations_jobs
 (
                                   id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-			          pid INT(12),
+			          pid INT,
                                   source TEXT(30),
 			          start INT(12),
 			          finish INT(12),

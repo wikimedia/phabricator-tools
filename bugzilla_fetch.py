@@ -32,8 +32,9 @@ def fetch(bugid):
     #grabbing one bug at a time for now
     buginfo = server.Bug.get(kwargs)['bugs']	
     buginfo =  buginfo[0]
+    # some bugs have header data but no actual content
+    # https://bugzilla.wikimedia.org/show_bug.cgi?id=32738
     com = server.Bug.comments(kwargs)['bugs'][str(bugid)]['comments']
-    bug_id = com[0]['bug_id']
 
     #have to do for json
     buginfo['last_change_time'] = datetime_to_epoch(buginfo['last_change_time'])
@@ -79,15 +80,22 @@ def fetch(bugid):
 def run_fetch(bugid, tries=1):
     if tries == 0:
         pmig = phabdb.phdb(db=config.bzmigrate_db)
-        current = pmig.sql_x("SELECT * from bugzilla_meta where id = %s", bugid)
+        current = pmig.sql_x("SELECT * from bugzilla_meta \
+                              where id = %s", bugid)
         if current:
             update_values =  (ipriority['fetch_failed'], '', '', now(), bugid)
-            pmig.sql_x("UPDATE bugzilla_meta SET priority=%s, header=%s, comments=%s modified=%s WHERE id = %s",
+            pmig.sql_x("UPDATE bugzilla_meta SET priority=%s, \
+                                                 header=%s, \
+                                                 comments=%s, \
+                                                 modified=%s \
+                                                 WHERE id = %s",
                        update_values)
         else:
             insert_values =  (bugid, ipriority['fetch_failed'], '', '', now(), now())
-            pmig.sql_x("INSERT INTO bugzilla_meta (id, priority, header, comments, modified, created) VALUES (%s, %s, %s, %s, %s, %s)",
-                       insert_values)
+            pmig.sql_x("INSERT INTO bugzilla_meta \
+                        (id, priority, header, comments, modified, created) \
+                        VALUES (%s, %s, %s, %s, %s, %s)",
+                        insert_values)
             pmig.close()
         elog('failed to grab %s' % (bugid,))
         return False
