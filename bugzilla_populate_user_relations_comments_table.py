@@ -92,7 +92,7 @@ def run_populate(bugid, tries=1):
 def main():
     bugs = return_bug_list()
     from multiprocessing import Pool
-    pool = Pool(processes=10)
+    pool = Pool(processes=int(config.bz_populate_multi))
     _ =  pool.map(run_populate, bugs)
     complete = len(filter(bool, _))
     failed = len(_) - complete

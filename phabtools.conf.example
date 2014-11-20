@@ -40,6 +40,7 @@ fetch_multi = 40
 create_multi = 3
 update_limit = 30
 update_multi = 10
+populate_multi = 6
 security = false
 
 [rtmigrate]
