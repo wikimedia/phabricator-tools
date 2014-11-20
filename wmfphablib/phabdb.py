@@ -393,7 +393,7 @@ def get_task_description(taskphid):
              passwd=phuser_passwd)
     _ = p.sql_x("SELECT description \
                  from maniphest_task \
-                 WHERE phid=%s", (phid,))
+                 WHERE phid=%s", (taskphid,))
     p.close()
     if _ is not None and len(_[0]) > 0:
         return _[0][0]

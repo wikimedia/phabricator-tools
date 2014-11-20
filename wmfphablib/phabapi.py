@@ -56,6 +56,13 @@ class phabapi:
         log("Updating author for %s to %s" % (refs, phid))
         phabdb.set_task_author(phid, newid)
 
+        descript = phabdb.get_task_description(refs[0])
+        try:
+            clean_description = descript.split('**Description:**\n', 1)[1]
+            phabdb.set_task_description(refs[0], clean_description)
+        except:
+            phabdb.set_task_description(refs[0], descript)
+
     def task_comment(self, task, msg):
         out = self.con.maniphest.update(id=task, comments=msg)
         return out
