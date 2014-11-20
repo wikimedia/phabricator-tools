@@ -47,7 +47,10 @@ def populate(bugid):
             pmig.sql_x("INSERT INTO user_relations_comments (user, issues, created, modified) VALUES (%s, %s, %s, %s)",
                        insert_values)
 
-    pmig = phabdb.phdb(db=config.bzmigrate_db)
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
+
     issue = pmig.sql_x("SELECT id FROM bugzilla_meta WHERE id = %s", bugid)
     if not issue:
         log('issue %s does not exist for user population' % (bugid,))

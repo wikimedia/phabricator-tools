@@ -37,7 +37,9 @@ def create(bugid):
     phabm = phabmacros('', '', '')
     phabm.con = phab
 
-    pmig = phdb(db=config.bzmigrate_db)
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
 
     current = pmig.sql_x("SELECT priority, \
                           header, \
@@ -331,7 +333,9 @@ def create(bugid):
 
 def run_create(bugid, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb(db=config.bzmigrate_db)
+        pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
         import_priority = pmig.sql_x("SELECT priority \
                                       FROM bugzilla_meta \
                                       WHERE id = %s", (bugid,))
@@ -370,7 +374,9 @@ def main():
     else:
         priority = 0
 
-    pmig = phdb(db=config.bzmigrate_db)
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
     bugs = return_bug_list(dbcon=pmig, priority=priority)
     pmig.close()
 

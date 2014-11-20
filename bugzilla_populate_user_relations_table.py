@@ -20,7 +20,10 @@ from wmfphablib import return_bug_list
 
 
 def populate(bugid):
-    pmig = phabdb.phdb(db=config.bzmigrate_db)
+
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
 
     issue = pmig.sql_x("SELECT id FROM bugzilla_meta WHERE id = %s", bugid)
     if not issue:

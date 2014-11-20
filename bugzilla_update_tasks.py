@@ -16,7 +16,9 @@ from wmfphablib import config
 
 def update(bugid):
 
-    pmig = phabdb.phdb(db=config.bzmigrate_db)
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
 
     epriority = pmig.sql_x("SELECT priority from task_relations where id = %s", bugid)
     if epriority and epriority[0] == ipriority['update_success']:
@@ -65,7 +67,9 @@ def update(bugid):
 
 def run_update(bugid, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb(db=config.bzmigrate_db)
+        pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
         current = pmig.sql_x("SELECT * from task_relations where id = %s", bugid)
         if current:
             pmig.sql_x("UPDATE task_relations SET priority=%s, blocks=%s, modified=%s WHERE id = %s",

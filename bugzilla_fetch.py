@@ -21,7 +21,10 @@ from wmfphablib import return_bug_list
 
 def fetch(bugid):
 
-    pmig = phabdb.phdb(db=config.bzmigrate_db)
+    pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
+
     server = xmlrpclib.ServerProxy(config.Bugzilla_url, use_datetime=True)
     token_data = server.User.login({'login': config.Bugzilla_login,
                                     'password': config.Bugzilla_password})
@@ -79,7 +82,10 @@ def fetch(bugid):
 
 def run_fetch(bugid, tries=1):
     if tries == 0:
-        pmig = phabdb.phdb(db=config.bzmigrate_db)
+        pmig = phabdb.phdb(db=config.bzmigrate_db,
+                       user=config.bzmigrate_user,
+                       passwd=config.bzmigrate_passwd)
+
         current = pmig.sql_x("SELECT * from bugzilla_meta \
                               where id = %s", bugid)
         if current:
