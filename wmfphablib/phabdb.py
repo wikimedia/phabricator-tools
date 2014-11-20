@@ -692,8 +692,6 @@ def set_task_id(id, phid):
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
-
-    print "UPDATE maniphest_task set id=%s where phid=%s" % (id, phid)
     p.sql_x("UPDATE maniphest_task set id=%s where phid=%s", (id, phid))
     p.close()
 
@@ -904,14 +902,13 @@ def mailinglist_phid(list_email):
     :param list_emai: email str
     """
     p = phdb(db="phabricator_metamta")
-    phid = p.sql_x("SELECT * \
+    _ = p.sql_x("SELECT * \
                     FROM metamta_mailinglist \
                     WHERE email = %s",
                     (list_email))
-    if phid:
-        phid = phid[1]
     p.close()
-    return phid
+    if _ is not None and len(_[0]) > 0:
+        return _[0][1]
 
 def archive_project(project):
     """set a project as archived"""
