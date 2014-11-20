@@ -21,7 +21,7 @@ def sanitize_project_name(product, component):
                          component_separator,
                          component)
 
-def build_comment(c):
+def build_comment(c, secstate):
     """ takes a native bz comment dict and outputs
     a dict ready for processing into phab
     """
@@ -43,7 +43,7 @@ def build_comment(c):
     if c['count'] == 0:
         clean_c['bug_id'] = c['bug_id']
 
-    if c['is_private']:
+    if c['is_private'] and secstate == 'none':
         c['text'] = security_mask
 
     attachment = find_attachment_in_comment(c['text'])

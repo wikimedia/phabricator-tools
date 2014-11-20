@@ -172,7 +172,7 @@ def create(bugid):
     for c in com:
         if not isinstance(c, dict):
             c = ast.literal_eval(c)
-        clean_c = bzlib.build_comment(c)
+        clean_c = bzlib.build_comment(c, buginfo['secstate'])
         clean_com.append(clean_c)
 
     log('project: ' + buginfo['project'])
