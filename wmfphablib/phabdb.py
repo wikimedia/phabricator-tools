@@ -452,6 +452,26 @@ def set_blocked_task(blocker, blocked):
     p.close()
     return get_tasks_blocked(blocker)
 
+
+def set_related_project(taskphid, projphid):
+    projects = get_task_projects(taskphid)
+    if projphid in projects:
+        util.vlog("%s project already tied to %s" % (projphid,
+                                                     taskphid))
+        return
+
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    insert_values = (taskphid, 41, projphid, int(time.time()), 0)
+    p.sql_x("INSERT INTO edge \
+             (src, type, dst, dateCreated, seq) \
+             VALUES (%s, %s, %s, %s, %s)",
+             insert_values)
+    p.close()
+    return get_task_projects(taskphid)
+
 def phid_hash():
     """get a random hash for PHID building"""
     return os.urandom(20).encode('hex')[:20]
@@ -636,6 +656,21 @@ def set_task_title_transaction(taskphid,
                   dateCreated,
                   dateModified))
     p.close()
+
+def get_task_projects(taskphid):
+
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT dst \
+                 FROM edge \
+                 WHERE type = 41 AND src=%s",
+                 (taskphid,), limit=None)
+    p.close()
+    if not _:
+        return []
+    return [b[0] for b in _]
 
 def get_tasks_blocked(taskphid):
     """ get the tasks I'm blocking
