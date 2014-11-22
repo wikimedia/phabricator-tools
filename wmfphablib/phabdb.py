@@ -23,7 +23,7 @@ def get_user_relations_last_finish(dbcon):
     fin = dbcon.sql_x("SELECT max(finish_epoch) \
                       from user_relations_jobs \
                       where \
-                      source=bugzilla_update_user_header",
+                      source='bugzilla_update_user_header'",
                       ())
     try:
         return int(fin[0][0])
@@ -37,7 +37,7 @@ def get_user_relations_comments_last_finish(dbcon):
     fin = dbcon.sql_x("SELECT max(finish_epoch) \
                       from user_relations_jobs \
                       where \
-                      source=bugzilla_update_user_comments",
+                      source='bugzilla_update_user_comments'",
                       ())
     try:
         return int(fin[0][0])
