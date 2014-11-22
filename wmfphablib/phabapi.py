@@ -93,36 +93,43 @@ class phabapi:
         :param pmembers: list
         :param view: str
         :param edit str"""
-
-        existing_proj = self.con.project.query(names=[project_name])
-
-
-        if not existing_proj['data']:
+        existing_proj = phabdb.get_project_phid(project_name)
+        #print "EXISTING PROJ: ", existing_proj
+        #print "EXISTING PROJ TYPE: ", type(existing_proj)
+        #existing_proj = self.con.project.query(names=[project_name])
+        if not existing_proj:
             log('need to create project(s) ' + project_name)
             try:
                 new_proj = self.con.project.create(name=project_name, members=pmembers)
             #XXX: Bug where we have to specify a members array!
             except phabricator.APIError:
                 pass
-            existing_proj = self.con.project.query(names=[project_name])
-            log(str(existing_proj))
-            phid = existing_proj['data'][existing_proj['data'].keys()[0]]['phid']
+            phid = phabdb.get_project_phid(project_name)
+            if not phid:
+                raise Exception("Project %s does not exist still." % (project_name,))
+            #existing_proj = self.con.project.query(names=[project_name])
+            #log(str(existing_proj))
+            #phid = existing_proj['data'][existing_proj['data'].keys()[0]]['phid']
             phabdb.set_project_policy(phid, view, edit)
         else:
-            phid = existing_proj['data'][existing_proj['data'].keys()[0]]['phid']
+            phid = existing_proj
+            #phid = existing_proj['data'][existing_proj['data'].keys()[0]]['phid']
             log(project_name + ' exists')
         return phid
 
-    def upload_file(self, name, data, dump=False):
+    def upload_file(self, name, data, viewPolicy, dump=False):
 
         if dump:
             with open(name, 'wb') as f:
                 f.write(data)
 
+        log("upload policy for %s is %s" % (name, viewPolicy))
         out = {}
         self.con.timeout = config.file_upload_timeout
         encoded = base64.b64encode(data)
-        uploadphid = self.con.file.upload(name=name, data_base64=encoded)
+        uploadphid = self.con.file.upload(name=name,
+                                          data_base64=encoded,
+                                          viewPolicy=viewPolicy)
         out['phid'] = uploadphid
         log("%s upload response: %s" % (name, uploadphid.response))
         fileid = phabdb.get_file_id_by_phid(uploadphid.response)

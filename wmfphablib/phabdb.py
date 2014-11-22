@@ -239,6 +239,7 @@ def is_bot(userphid):
                     from user where phid=%s",
                     (userphid,), limit=1)
     p.close()
+
     if not isbot:
         raise Exception("user is not a present")
     if int(isbot[0][0]) > 0:
@@ -352,6 +353,7 @@ def set_comment_author(transxphid, userphid):
              SET authorPHID=%s \
              WHERE transactionPHID=%s",
              (userphid, transxphid))
+    p.close()
 
 def set_task_mtime(taskphid, mtime):
     """set manual epoch modtime for task
@@ -416,8 +418,8 @@ def get_emails(modtime=0):
              user=phuser_user,
              passwd=phuser_passwd)
     query = "SELECT address from user_email"
-    _ = pmig.sql_x(query, (), limit=None)
-    pmig.close()
+    _ = p.sql_x(query, (), limit=None)
+    p.close()
     if not _:
         return ''
     return _
@@ -804,9 +806,8 @@ def remove_reference(refname):
     :param refname: str
     """
 
-    p = phdb(db='phabricator_maniphest',
-             user=phmanifest_user,
-             passwd=phmanifest_passwd)
+    p = phdb(db='phabricator_maniphest', user=phuser_user, passwd=phuser_passwd)
+
     _ = p.sql_x("DELETE from \
                  maniphest_customfieldstringindex \
                  WHERE indexValue=%s", (refname,))

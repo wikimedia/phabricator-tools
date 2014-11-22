@@ -141,8 +141,8 @@ def remove_issue_by_bugid(bugid, ref):
     notice("!Removing issue T%s!" % (issueid,))
     out = ''
     out += destroy_issue(issueid)
-    out += phabdb.remove_reference("%s%s" % (ref, bugid))
-    out += phabdb.reference_ticket("%s%s" % (ref, bugid))
+    out += str(phabdb.remove_reference("%s%s" % (ref, bugid)))
+    out += str(phabdb.reference_ticket("%s%s" % (ref, bugid)))
     return out
 
 def return_bug_list(dbcon=None, priority=None):

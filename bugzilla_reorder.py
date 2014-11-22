@@ -23,9 +23,10 @@ from wmfphablib import bzlib
 from wmfphablib import ipriority
 
 def reorder(first, start, end, placeholder=300001):
-    pmig = phabdb.phdb(db=config.bzmigrate_db,
-                       user=config.bzmigrate_user,
-                       passwd=config.bzmigrate_passwd)
+    #pmig = phabdb.phdb(db=config.bzmigrate_db,
+    #                   user=config.bzmigrate_user,
+    #                   passwd=config.bzmigrate_passwd)
+
     # range of issues to renumber
     issues = range(int(start), int(end) + 1)
     first_issue = issues[0]

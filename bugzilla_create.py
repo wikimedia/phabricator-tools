@@ -51,6 +51,7 @@ def create(bugid):
     if current:
         import_priority, buginfo, com, created, modified = current[0]
     else:    
+        pmig.close()
         elog('%s not present for migration' % (bugid,))
         return False
 
@@ -58,6 +59,7 @@ def create(bugid):
         refexists = phabdb.reference_ticket('%s%s' % (bzlib.prepend,
                                                       id))
         if refexists:
+            pmig.close()
             return refexists
 
     if get_ref(bugid):
@@ -112,8 +114,13 @@ def create(bugid):
             vlog('ignoring obsolete attachment: %s' %  (str(a)))
             a['ignore'] = 'obsolete'
         else:
+            if buginfo["secstate"] == 'none':
+                viewpolicy = 'public'
+            else:
+                viewpolicy = phabdb.get_project_phid('security')
             try:
-                upload = phabm.upload_file(a['file_name'], a['data'].data)
+                #upload = phabm.upload_file(a['file_name'], a['data'].data)
+                upload = phabm.upload_file(a['file_name'], a['data'].data, viewpolicy)
                 a['phid'] = upload['phid']
                 a['name'] = upload['name']
                 a['objectName'] = upload['objectName']
