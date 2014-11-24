@@ -2,6 +2,10 @@ import re
 
 prepend = 'bz'
 security_mask = '//**content hidden as private in Bugzilla**//'
+dupe_literals = ['This bug has been marked as a duplicate of bug',
+                 'This bug has been marked as a duplicate of',
+                 'has been marked as a duplicate of this bug']
+
 
 # Some issues are just missing instead of constant failures we skip
 missing = [15368, 15369, 15370, 15371, 15372, 15373, 15374]
@@ -28,10 +32,6 @@ def build_comment(c, secstate):
 
     # these indicate textual metadata history and should be
     # preserved as literal
-    dupe_literals = ['This bug has been marked as a duplicate of bug',
-                     'This bug has been marked as a duplicate of',
-                     'has been marked as a duplicate of this bug']
-
     clean_c = {}
     clean_c['author'] =  c['author'].split('@')[0]
     clean_c['creation_time'] = str(c['creation_time'])
@@ -62,6 +62,23 @@ def build_comment(c, secstate):
     c['text'] = '\n'.join(fmt_text)
     clean_c['text'] = c['text']
     return clean_c
+
+def build_comment_comment_regen(text, is_private):
+
+    if is_private:
+        text = security_mask
+
+    fmt_text = []
+    text = text.splitlines()
+    for t in text:
+        if t.startswith('Created attachment'):
+            continue
+        elif '***' in t and any(map(lambda l: l in t, dupe_literals)):
+            fmt_text.append('%%%{0}%%%'.format(t))
+        else:               
+            fmt_text.append(t)
+    clean_text = '\n'.join(fmt_text)
+    return clean_text
 
 def find_attachment_in_comment(text):
     """Find attachment id in bz comment

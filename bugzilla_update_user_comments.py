@@ -54,22 +54,15 @@ def update(user):
         jcom, jxcom = comdetails[0]
         coms = json.loads(jcom)
         xcoms = json.loads(jxcom)
-
         for key, xi in xcoms.iteritems():
             com = coms[util.get_index(coms, "count", int(key))]
             content = com['text']
-
-            if com['is_private']:
-                vlog('is private')
-                comment_content = bzlib.security_mask
-            else:
-                vlog('is NOT private')
-                comment_content = content + xi['xattached']
-
+            comment_content = bzlib.build_comment_comment_regen(content, com['is_private'])
             if com["creator"] == user['user']:
                 log("Updating comment %s for %s" % (xi['xctransaction'], user['user']))
                 phabdb.set_comment_author(xi['xctransaction'], user['userphid'])
-                phabdb.set_comment_content(xi['xctransaction'], comment_content)
+                phabdb.set_comment_content(xi['xctransaction'],
+                                           comment_content + xi['xattached'])
 
     current = phabdb.get_user_migration_comment_history(user['user'], pmig)
     if current:
