@@ -172,11 +172,11 @@ def run_populate(bugid, tries=1):
 
 def main():
     bugs = return_bug_list()
-    from multiprocessing import Pool
-    pool = Pool(processes=int(config.bz_populate_multi))
-    _ =  pool.map(run_populate, bugs)
-    complete = len(filter(bool, _))
-    failed = len(_) - complete
+    result = []
+    for b in bugs:
+        result.append(run_populate(b))
+    complete = len(filter(bool, result))
+    failed = len(result) - complete
     print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
 
 if __name__ == '__main__':

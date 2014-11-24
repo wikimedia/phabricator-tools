@@ -181,12 +181,12 @@ def main():
                                 starting_epoch,
                                 user_count, issue_count, pmig)
 
+    results = []
+    for h in histories:
+        results.append(run_update(h))
+    complete = len(filter(bool, results))
+    failed = len(results) - complete
 
-    from multiprocessing import Pool
-    pool = Pool(processes=int(config.bz_updatemulti))
-    _ =  pool.map(run_update, histories)
-    complete = len(filter(bool, _))
-    failed = len(_) - complete
     phabdb.user_relations_finish(pid,
                                  int(time.time()),
                                  ipriority['update_success'],

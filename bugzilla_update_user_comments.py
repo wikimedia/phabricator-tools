@@ -78,7 +78,7 @@ def update(user):
         log('%s user does not exist to update' % (user['user']))
         return False
     pmig.close()
-    log(util.purge_cache())
+    #log(util.purge_cache())
     return True
 
 def run_update(user, tries=1):
@@ -182,13 +182,12 @@ def main():
                                 starting_epoch,
                                 user_count, issue_count, pmig)
 
+    results = []
+    for h in histories:
+        results.append(run_update(h))
+    complete = len(filter(bool, results))
+    failed = len(results) - complete
 
-    from multiprocessing import Pool
-
-    pool = Pool(processes=int(config.bz_updatemulti))
-    _ =  pool.map(run_update, histories)
-    complete = len(filter(bool, _))
-    failed = len(_) - complete
     phabdb.user_relations_finish(pid,
                                  int(time.time()),
                                  ipriority['update_success'],
@@ -198,7 +197,7 @@ def main():
                                  pmig)
 
     pm = phabmacros(config.phab_user, config.phab_cert, config.phab_host)
-    vlog(util.update_blog(source, complete, failed, user_count, issue_count, pm))
+    #vlog(util.update_blog(source, complete, failed, user_count, issue_count, pm))
 
     pmig.close()
     print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
