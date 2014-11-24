@@ -39,6 +39,7 @@ bz_createmulti = int(parser.get(parser_mode, 'create_multi'))
 bz_fetchmulti = int(parser.get(parser_mode, 'fetch_multi'))
 bz_updatelimit = int(parser.get(parser_mode, 'update_limit'))
 bz_updatemulti = int(parser.get(parser_mode, 'update_multi'))
+bz_update_lookback = int(parser.get(parser_mode, 'update_lookback'))
 bz_populate_multi = int(parser.get(parser_mode, 'populate_multi'))
 bz_security = parser.get(parser_mode, 'security')
 parser_mode = 'rtmigrate'
@@ -84,6 +85,7 @@ if __name__ == '__main__':
     print bz_updatelimit
     print bz_updatemulti
     print bz_populate_multi
+    print bz_update_lookback
     print bz_security
     print 'RT\n'
     print rtmigrate_db

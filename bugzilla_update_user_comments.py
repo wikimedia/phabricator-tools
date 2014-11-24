@@ -126,7 +126,7 @@ def main():
     parser = argparse.ArgumentParser(description='Updates user header metadata from bugzilla')
     parser.add_argument('-a', action="store_true", default=False)
     parser.add_argument('-e', action="store", dest='email')
-    parser.add_argument('-m', action="store", dest="starting_epoch", default=None)
+    parser.add_argument('-m', action="store", dest="backlog", default=None)
     parser.add_argument('-v', action="store_true", default=False)
     args =  parser.parse_args()
 
@@ -135,15 +135,16 @@ def main():
                        passwd=config.bzmigrate_passwd)
 
     if args.a:
-        starting_epoch = phabdb.get_user_relations_comments_last_finish(pmig)
-        users, finish_epoch = phabdb.get_verified_users(starting_epoch, config.bz_updatelimit)
+        backlog = time.time() - config.bz_update_lookback
+        log("Backlog since %d" % (backlog),)
+        users, finish_epoch = phabdb.get_verified_users(backlog, config.bz_updatelimit)
     elif args.email:
         users = phabdb.get_verified_user(args.email)
-        starting_epoch = 0
+        backlog = 0
         finish_epoch = 0
-    elif args.starting_epoch:
-        users, finish_epoch = phabdb.get_verified_users(args.starting_epoch)
-        starting_epoch = args.starting_epoch
+    elif args.backlog:
+        users, finish_epoch = phabdb.get_verified_users(args.backlog)
+        backlog = args.backlog
     else:
         parser.print_help()
         sys.exit(1)
@@ -172,7 +173,7 @@ def main():
                                 source,
                                 int(time.time()),
                                 ipriority['na'],
-                                starting_epoch,
+                                backlog,
                                 user_count, issue_count, pmig)
 
     results = []
