@@ -32,6 +32,24 @@ OPTIONAL:
      via test/loadrtppl.py
         ppl = {"test": "test@wikimedia.org"}
 
+OPERATION
+
+See bugrun.sh
+
+bugzilla_fetch.py reads Bugzilla, populates a local database next to Phabricator.
+A lot of the data is stored as JSON in its fields.
+
+Then bugzilla_create.py creates tasks.
+bugzilla_update_tasks.py updates tasks
+
+bugzilla_populate_user_relations_comments_table.py and
+bugzilla_populate_user_relations_table.py
+get the comment transaction ID. If the user exists in Phabricator they can later
+associate the right user with it.
+
+bugzilla_update_user_comments.py updates comments
+
+
 This repo makes use of the following packages:
 
 python-phabricator
@@ -49,7 +67,7 @@ CREATE TABLE bugzilla_meta (
                              id INT,
                              priority INT,
                              header TEXT(10000),
-                             comments TEXT(100000), 
+                             comments TEXT(100000),
                              xcomments TEXT(100000),
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
@@ -60,7 +78,7 @@ CREATE TABLE rt_meta (
                              id INT,
                              priority INT,
                              header TEXT(10000),
-                             comments TEXT(100000), 
+                             comments TEXT(100000),
                              xcomments TEXT(100000),
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
@@ -71,7 +89,7 @@ CREATE TABLE fab_meta (
                              id INT,
                              priority INT,
                              header TEXT(10000),
-                             comments TEXT(100000), 
+                             comments TEXT(100000),
                              created int(12) NOT NULL,
                              modified int(12) NOT NULL
                             );
