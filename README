@@ -18,7 +18,7 @@ Preflight check for migrations:
     ensure file size (mysql / php)
     bot creation
     set up hosts file entry for db on main (dns is slow)
-    update /etc/phabtools
+    create and modify /etc/phabtools.conf (start from phabtools.conf.example)
 
 
 IMPORTANT:
@@ -52,9 +52,10 @@ bugzilla_update_user_comments.py updates comments
 
 This repo makes use of the following packages:
 
-python-phabricator
+python-phabricator  (sudo apt-get install python-phabricator
+                     or git clone https://github.com/disqus/python-phabricator)
 python-rtkit
-python-mysqldb
+python-mysqldb      (sudo apt-get install python-mysqldb)
 
 Notes on DB Schema for migration:
 
