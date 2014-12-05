@@ -1,5 +1,4 @@
-enabled = ['codfw', 'ulsfo', 'pmtpa', 'ops-requests', 'network', 'esams', 'eqiad',
-                'core-ops',]
+enabled = ['codfw', 'ulsfo', 'pmtpa', 'ops-requests', 'network', 'esams', 'eqiad', 'core-ops',]
 
 import util
 try:

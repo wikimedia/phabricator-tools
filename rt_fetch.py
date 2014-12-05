@@ -7,7 +7,7 @@ import getpass
 import ConfigParser
 import json
 sys.path.append('/home/rush/python-rtkit/')
-from wmfphablib import phdb
+from wmfphablib import phabdb
 from wmfphablib import rtlib
 from wmfphablib import log
 from wmfphablib import vlog
@@ -27,16 +27,26 @@ def fetch(tid):
                                    config.rt_login,
                                    config.rt_passwd,
                                    authenticators.CookieAuthenticator)
+
     log("fetching issue %s" % (tid,))
     tinfo = response.get(path="ticket/%s" % (tid,))
     history = response.get(path="ticket/%s/history?format=l" % (tid,))
     links = response.get(path="ticket/%s/links/show" % (tid,))
     vlog(tinfo)
 
+    if re.search('\#\sTicket\s\d+\sdoes\snot\sexist.$', tinfo.strip()):
+        log("Skipped as source missing for %s" % (tid,))
+        return 'missing'
+
     # some private todo's and such
     if 'You are not allowed to display' in tinfo:
-        log("Access denied for %s" % (tid,))
-        return False
+        log("Skipped as access denied for %s" % (tid,))
+        return 'denied'
+
+    #breaking detailed history into posts
+    #23/23 (id/114376/total)
+    comments = re.split("\d+\/\d+\s+\(id\/.\d+\/total\)", history)
+    comments = [c.rstrip('#').rstrip('--') for c in comments]
 
     # we get back freeform text and create a dict
     dtinfo = {}
@@ -51,10 +61,10 @@ def fetch(tid):
             v = cv_kv[1]
             dtinfo[k.strip()] = v.strip()
 
-    #breaking detailed history into posts
-    #23/23 (id/114376/total)
-    comments = re.split("\d+\/\d+\s+\(id\/.\d+\/total\)", history)
-    comments = [c.rstrip('#').rstrip('--') for c in comments]
+    vlog("Enabled queues: %s" % (str(rtlib.enabled)))
+    if dtinfo['Queue'] not in rtlib.enabled:
+        log("Skipped as disabled queue for %s (%s)" % (str(tid), dtinfo['Queue']))
+        return 'disabled'
 
     if dtinfo['Status'] == 'resolved':
         creation_priority = ipriority['na']
@@ -63,9 +73,27 @@ def fetch(tid):
 
     com = json.dumps(comments)
     tinfo = json.dumps(dtinfo)
-    pmig = phdb(db=config.rtmigrate_db)
-    insert_values =  (tid, creation_priority, tinfo, com, now(), now())
-    pmig.sql_x("INSERT INTO rt_meta \
+
+    pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
+
+
+    current = pmig.sql_x("SELECT * from rt_meta where id = %s", tid)
+    if current:
+        update_values =  (creation_priority, tinfo, com, now(), now())
+        pmig.sql_x("UPDATE rt_meta SET priority=%s, \
+                                       header=%s, \
+                                       comments=%s, \
+                                       modified=%s \
+                                       WHERE id = %s",
+                   update_values)
+        vlog('update: ' + str(update_values))
+
+    else:
+        insert_values =  (tid, creation_priority, tinfo, com, now(), now())
+
+        pmig.sql_x("INSERT INTO rt_meta \
                 (id, priority, header, comments, created, modified) \
                 VALUES (%s, %s, %s, %s, %s, %s)",
                 insert_values)
@@ -74,10 +102,15 @@ def fetch(tid):
 
 def run_fetch(tid, tries=1):
     if tries == 0:
-        pmig = phdb(db=config.rtmigrate_db)
+        pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
         insert_values =  (tid, ipriority['fetch_failed'], '', '', now(), now())
-        pmig.sql_x("INSERT INTO rt_meta (id, priority, header, comments, created, modified) VALUES (%s, %s, %s, %s, %s, %s)",
-                   insert_values)
+
+        pmig.sql_x("INSERT INTO rt_meta \
+                (id, priority, header, comments, created, modified) \
+                VALUES (%s, %s, %s, %s, %s, %s)",
+                insert_values)
         pmig.close()
         elog('failed to grab %s' % (tid,))
         return False
@@ -92,13 +125,29 @@ def run_fetch(tid, tries=1):
         return run_fetch(tid, tries=tries)
 
 def main():
+
     bugs = return_bug_list()
     from multiprocessing import Pool
     pool = Pool(processes=int(config.bz_fetchmulti))
     _ =  pool.map(run_fetch, bugs)
-    complete = len(filter(bool, _))
-    failed = len(_) - complete
-    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
+    vlog(_)
+    denied = len([i for i in _ if i == 'denied'])
+    disabled = len([i for i in _ if i == 'disabled'])
+    missing = len([i for i in _ if i == 'missing'])
+    complete = len(filter(bool, [i for i in _ if i not in ['denied', 'disabled', 'missing']]))
+    known_bad = denied + disabled + missing
+    failed = (len(_) - known_bad) - complete
+    print '-----------------------------\n \
+          %s Total %s\n \
+          known bad %s (denied %s, disabled %s, missing %s)\n\n \
+          completed %s, failed %s' % (sys.argv[0],
+                                                          len(bugs),
+                                                          known_bad,
+                                                          denied,
+                                                          disabled,
+                                                          missing,
+                                                          complete,
+                                                          failed)
 
 if __name__ == '__main__':
     main()

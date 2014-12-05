@@ -662,10 +662,10 @@ def add_task_policy_users(taskPHID,
     return policyPHID
 
 def get_task_edit_policyPHID(taskPHID):
-   """ retrive task edit policy
-   :param taskPHID: str
-   :returns: str
-   """
+    """ retrive task edit policy
+    :param taskPHID: str
+    :returns: str
+    """
 
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
@@ -679,10 +679,10 @@ def get_task_edit_policyPHID(taskPHID):
         return _[0][0]
 
 def get_task_view_policy(phid):
-   """ retrive task view policy
-   :param taskPHID: str
-   :returns: str
-   """
+    """ retrive task view policy
+    :param taskPHID: str
+    :returns: str
+    """
 
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,

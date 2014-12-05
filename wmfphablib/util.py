@@ -60,17 +60,17 @@ def epoch_to_datetime(epoch, timezone='UTC'):
            ).strftime('%Y-%m-%d %H:%M:%S'))) + " (%s)" % (timezone,)
 
 def errorlog(msg):
-    msg = unicode(msg)
     try:
+        msg = unicode(msg)
         syslog.syslog(msg)
         print >> sys.stderr, msg
     except:
         print 'error logging, well...error output'
 
 def log(msg):
-    msg = unicode(msg)
     if '-v' in ''.join(sys.argv):
         try:
+            msg = unicode(msg)
             syslog.syslog(msg)
             print msg
         except:
@@ -82,12 +82,12 @@ def notice(msg):
     log(msg)
 
 def vlog(msg):
-    msg = unicode(msg)
     if '-vv' in ''.join(sys.argv):
         try:
+            msg = unicode(msg)
             print '-> ', msg
         except:
-            print 'error logging output'
+            print 'error logging verbose output'
 
 def update_blog(source, complete, failed, user_count, issue_count, apicon):
     title = "%s completed %s / failed %s" % (epoch_to_datetime(time.time()),
