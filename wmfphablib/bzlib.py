@@ -10,6 +10,9 @@ dupe_literals = ['This bug has been marked as a duplicate of bug',
 # Some issues are just missing instead of constant failures we skip
 missing = [15368, 15369, 15370, 15371, 15372, 15373, 15374]
 
+def is_sensitive(name):
+    return name.strip().lower().startswith('security')
+
 def sanitize_project_name(product, component):
     """ translate bz product/component into valid project
     :param product: str

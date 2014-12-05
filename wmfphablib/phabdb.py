@@ -7,6 +7,7 @@ import traceback
 import syslog
 import time
 import util
+import bzlib
 from config import dbhost
 from config import phmanifest_user
 from config import phmanifest_passwd
@@ -15,6 +16,10 @@ from config import phuser_passwd
 from config import fabmigrate_db
 from config import fabmigrate_user
 from config import fabmigrate_passwd
+from config import bzmigrate_db
+from config import bzmigrate_user
+from config import bzmigrate_passwd
+
 
 def get_user_relations_last_finish(dbcon):
     """ get last finish time for update script
@@ -43,6 +48,30 @@ def get_user_relations_comments_last_finish(dbcon):
         return int(fin[0][0])
     except:
         return 1
+
+
+
+def is_bz_security_issue(id):
+    """ validate a bz issue was in security product
+    :param id: int
+    :returns: bool
+    """
+
+    p = phdb(db=bzmigrate_db,
+             user=bzmigrate_user,
+             passwd=bzmigrate_passwd)
+
+    _ = p.sql_x("SELECT header \
+                 from bugzilla_meta \
+                 where id=%s",
+                 (id,))
+
+    if _ is not None and len(_[0]) > 0:
+        header = json.loads(_[0][0])
+        if bzlib.is_sensitive(header["product"]):
+            return True
+    else:
+        return False
 
 def get_issues_by_priority(dbcon, priority):
     """ get failed creations
@@ -264,9 +293,9 @@ def last_comment(phid):
         return ''
     return _[0][0]
 
-def set_issue_status(taskphid, status):
+def set_issue_status(taskPHID, status):
     """ update an issue state
-    :param taskphid: str
+    :param taskPHID: str
     :param status: str
     """
     p = phdb(db='phabricator_maniphest',
@@ -274,12 +303,12 @@ def set_issue_status(taskphid, status):
              passwd=phuser_passwd)
     p.sql_x("UPDATE maniphest_task \
              SET status=%s WHERE phid=%s",
-             (status, taskphid))
+             (status, taskPHID))
     p.close()
 
-def set_issue_assigned(taskphid, userphid):
+def set_issue_assigned(taskPHID, userphid):
     """ update task assignee
-    :param taskphid: str
+    :param taskPHID: str
     :param userphid: str
     """
     p = phdb(db='phabricator_maniphest',
@@ -287,7 +316,7 @@ def set_issue_assigned(taskphid, userphid):
              passwd=phuser_passwd)
     p.sql_x("UPDATE maniphest_task \
              SET ownerPHID=%s WHERE phid=%s",
-             (userphid, taskphid))
+             (userphid, taskPHID))
     p.close()
 
 def set_comment_content(transxphid, content):
@@ -318,7 +347,7 @@ def set_transaction_time(transxphid, metatime):
 
 def set_comment_time(transxphid, metatime):
     """set manual epoch modtime for task
-    :param taskphid: str
+    :param taskPHID: str
     :param mtime: int of modtime
     """
     p = phdb(db='phabricator_maniphest',
@@ -355,9 +384,9 @@ def set_comment_author(transxphid, userphid):
              (userphid, transxphid))
     p.close()
 
-def set_task_mtime(taskphid, mtime):
+def set_task_mtime(taskPHID, mtime):
     """set manual epoch modtime for task
-    :param taskphid: str
+    :param taskPHID: str
     :param mtime: int of modtime
     """
     p = phdb(db='phabricator_maniphest',
@@ -366,13 +395,13 @@ def set_task_mtime(taskphid, mtime):
     p.sql_x("UPDATE maniphest_task \
              SET dateModified=%s \
              WHERE phid=%s",
-             (mtime, taskphid))
+             (mtime, taskPHID))
     p.close()
 
 
-def set_task_ctime(taskphid, ctime):
+def set_task_ctime(taskPHID, ctime):
     """set manual epoch ctime for task
-    :param taskphid: str
+    :param taskPHID: str
     :param mtime: int of modtime
     """
     p = phdb(db='phabricator_maniphest',
@@ -380,29 +409,29 @@ def set_task_ctime(taskphid, ctime):
              passwd=phuser_passwd)
     p.sql_x("UPDATE maniphest_task \
              SET dateCreated=%s \
-             WHERE phid=%s", (ctime, taskphid))
-    titlexphid = get_task_title_transaction(taskphid)
+             WHERE phid=%s", (ctime, taskPHID))
+    titlexphid = get_task_title_transaction(taskPHID)
     set_transaction_time(titlexphid, ctime)
 
     p.close()
 
-def get_task_description(taskphid):
+def get_task_description(taskPHID):
     """get task description
-    :param taskphid: str
+    :param taskPHID: str
     """
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
     _ = p.sql_x("SELECT description \
                  from maniphest_task \
-                 WHERE phid=%s", (taskphid,))
+                 WHERE phid=%s", (taskPHID,))
     p.close()
     if _ is not None and len(_[0]) > 0:
         return _[0][0]
 
-def set_task_description(taskphid, text):
+def set_task_description(taskPHID, text):
     """set task description
-    :param taskphid: str
+    :param taskPHID: str
     :param mtime: int of modtime
     """
     p = phdb(db='phabricator_maniphest',
@@ -410,7 +439,7 @@ def set_task_description(taskphid, text):
              passwd=phuser_passwd)
     p.sql_x("UPDATE maniphest_task \
              SET description=%s \
-             WHERE phid=%s", (text, taskphid))
+             WHERE phid=%s", (text, taskPHID))
     p.close()
 
 def get_emails(modtime=0):
@@ -453,24 +482,24 @@ def set_blocked_task(blocker, blocked):
     return get_tasks_blocked(blocker)
 
 
-def set_related_project(taskphid, projphid):
-    projects = get_task_projects(taskphid)
+def set_related_project(taskPHID, projphid):
+    projects = get_task_projects(taskPHID)
     if projphid in projects:
         util.vlog("%s project already tied to %s" % (projphid,
-                                                     taskphid))
+                                                     taskPHID))
         return
 
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
 
-    insert_values = (taskphid, 41, projphid, int(time.time()), 0)
+    insert_values = (taskPHID, 41, projphid, int(time.time()), 0)
     p.sql_x("INSERT INTO edge \
              (src, type, dst, dateCreated, seq) \
              VALUES (%s, %s, %s, %s, %s)",
              insert_values)
     p.close()
-    return get_task_projects(taskphid)
+    return get_task_projects(taskPHID)
 
 def phid_hash():
     """get a random hash for PHID building"""
@@ -481,7 +510,72 @@ def task_transaction_phid():
     return 'PHID-XACT-TASK-' + str(phid_hash()[:15])
 
 def gen_user_phid():
+    """get a user phid"""
     return 'PHID-USER-' + str(phid_hash()[:20])
+
+def gen_plcy_phid():
+    """ get a policy phid"""
+    return 'PHID-PLCY-' + str(phid_hash()[:20])
+
+def set_task_policy(taskPHID, policyPHID):
+    """ set the policy on an issue
+    :param taskPHID: str
+    :param policyPHID: str
+    :notes: this sets both view and edit
+    """
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    p.sql_x("UPDATE maniphest_task \
+             SET viewPolicy=%s \
+             WHERE phid=%s", (policyPHID, taskPHID))
+
+    p.sql_x("UPDATE maniphest_task \
+             SET editPolicy=%s \
+             WHERE phid=%s", (policyPHID, taskPHID))
+
+    p.close()
+
+def create_policy(allowedUSERS=[],
+                  allowedProjects=[],
+                  defaultAction='deny'):
+    """ create a new policy
+    :param allowedUSERS: list
+    :param allowedProject: list
+    :param defaultAction: str
+    :returns: str of PHID
+    """
+
+    p = phdb(db='phabricator_policy',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    dateCreated = int(time.time())
+    dateModified = int(time.time())
+    newphid = gen_plcy_phid()
+
+    rulesSource = [{"action":"allow",
+                    "rule":"PhabricatorPolicyRuleUsers",
+                    "value": allowedUSERS},
+                    {"action":"allow",
+                    "rule":"PhabricatorPolicyRuleProjects",
+                    "value":allowedProjects}]
+
+    p.sql_x("INSERT INTO policy \
+                 (phid, \
+                  rules, \
+                  defaultAction, \
+                  dateCreated, \
+                  dateModified) \
+                  VALUES (%s, %s, %s, %s, %s)",
+                  (newphid,
+                  json.dumps(rulesSource),
+                  defaultAction,
+                  dateCreated,
+                  dateModified))
+    p.close()
+    return newphid
 
 def get_task_title(phid):
     """get the title of a task by phid
@@ -492,6 +586,108 @@ def get_task_title(phid):
              passwd=phuser_passwd)
 
     _ = p.sql_x("SELECT title \
+                 from maniphest_task \
+                 WHERE phid=%s", (phid,))
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
+def get_policy(phid):
+    """ retreieve contents of a policy
+    :param phid: str
+    """
+
+    p = phdb(db='phabricator_policy',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT rules \
+                 from policy \
+                 WHERE phid=%s", (phid,))
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
+def add_task_policy_users(taskPHID,
+                          users=[]):
+    
+    """add phid to task policy
+    :param taskPHID: str
+    :param users: list of user PHIDs
+
+    notes: This should be used only to fixup
+    specifically tickets for whom 
+    all VIEWERS are trustable with EDITABLE permissions.
+    """
+
+    # Assume view policy is canonical
+    viewPolicy = get_task_view_policy(taskPHID)
+
+    # these are special policy strings
+    if viewPolicy in ['public', 'users']:
+        return ''
+    elif viewPolicy.startswith('PHID-PLCY'):
+        jrules = get_policy(viewPolicy)
+        rules = json.loads(jrules)
+        for p in rules:
+            if p['rule'] == "PhabricatorPolicyRuleUsers":
+                existingUSERS = p['value']
+                break
+
+        else:
+            existingUSERS = []
+
+        allowedUSERS = existingUSERS + users
+
+        # In case of no new users bail immediately
+        newUSERS = [u for u in users if u not in existingUSERS]
+        if not newUSERS:
+            return ''
+
+        for p in rules:
+            if p['rule'] == "PhabricatorPolicyRuleProjects":
+                allowedProjects = p['value']
+                break
+        else:
+            allowedProjects = []
+    elif viewPolicy.startswith('PHID-PROJ'):
+        allowedUSERS = users
+        allowedProjects = [viewPolicy]
+
+    policyPHID = create_policy(allowedUSERS=allowedUSERS,
+                               allowedProjects=allowedProjects)
+    # Mirror upstream practic of _always_ creating a new policy
+    # when doing additions / modifications
+    set_task_policy(taskPHID, policyPHID)
+    return policyPHID
+
+def get_task_edit_policyPHID(taskPHID):
+   """ retrive task edit policy
+   :param taskPHID: str
+   :returns: str
+   """
+
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT editPolicy \
+                 from maniphest_task \
+                 WHERE phid=%s", (taskPHID,))
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
+def get_task_view_policy(phid):
+   """ retrive task view policy
+   :param taskPHID: str
+   :returns: str
+   """
+
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    _ = p.sql_x("SELECT viewPolicy \
                  from maniphest_task \
                  WHERE phid=%s", (phid,))
     p.close()
@@ -518,6 +714,11 @@ def get_task_title_transaction(phid):
 def create_test_user(userName,
                      realName,
                      address):
+    """ generate dummy user accounts for testing
+    :param userName: str
+    :param realName: str
+    :param address: str (valid email format)
+    """
 
     p = phdb(db='phabricator_user',
              user=phuser_user,
@@ -591,14 +792,14 @@ def create_test_user(userName,
                    dateModified))
     p.close()
 
-def set_task_title_transaction(taskphid,
+def set_task_title_transaction(taskPHID,
                                authorphid,
                                viewPolicy,
                                editPolicy,
                                source='legacy'):
     """creates a title transaction for "created"
        transaction display in UI.
-    :param taskphid: str
+    :param taskPHID: str
     :authorphid: str
     :viewPolicy: str
     :editPolicy: str
@@ -610,7 +811,7 @@ def set_task_title_transaction(taskphid,
           transactions and via conduit are not.
     """
 
-    existing = get_task_title_transaction(taskphid)
+    existing = get_task_title_transaction(taskPHID)
     if existing:
         return
 
@@ -624,7 +825,7 @@ def set_task_title_transaction(taskphid,
     contentSource = json.dumps({"source": source,
                                 "params": {"ip":"127.0.0.1"}})
     commentVersion = 0
-    title = get_task_title(taskphid)
+    title = get_task_title(taskPHID)
     oldValue = 'null'
 
     p.sql_x("INSERT INTO maniphest_transaction \
@@ -644,7 +845,7 @@ def set_task_title_transaction(taskphid,
                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                   (newphid,
                   authorphid,
-                  taskphid,
+                  taskPHID,
                   viewPolicy,
                   editPolicy,
                   commentVersion,
@@ -657,7 +858,11 @@ def set_task_title_transaction(taskphid,
                   dateModified))
     p.close()
 
-def get_task_projects(taskphid):
+def get_task_projects(taskPHID):
+    """ get projects assocated with a task
+    :param taskPHID: str
+    :returns: list of PHID's
+    """
 
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
@@ -666,15 +871,15 @@ def get_task_projects(taskphid):
     _ = p.sql_x("SELECT dst \
                  FROM edge \
                  WHERE type = 41 AND src=%s",
-                 (taskphid,), limit=None)
+                 (taskPHID,), limit=None)
     p.close()
     if not _:
         return []
     return [b[0] for b in _]
 
-def get_tasks_blocked(taskphid):
+def get_tasks_blocked(taskPHID):
     """ get the tasks I'm blocking
-    :param taskphid: str
+    :param taskPHID: str
     :returns: list
     """
     p = phdb(db='phabricator_maniphest',
@@ -684,15 +889,15 @@ def get_tasks_blocked(taskphid):
     _ = p.sql_x("SELECT dst \
                  FROM edge \
                  WHERE type = 4 AND src=%s",
-                 (taskphid,), limit=None)
+                 (taskPHID,), limit=None)
     p.close()
     if not _:
         return []
     return [b[0] for b in _]
 
-def get_blocking_tasks(taskphid):
+def get_blocking_tasks(taskPHID):
     """ get the tasks blocking me
-    :param taskphid: str
+    :param taskPHID: str
     :returns: list
     """
     p = phdb(db='phabricator_maniphest',
@@ -701,7 +906,7 @@ def get_blocking_tasks(taskphid):
     _ = p.sql_x("SELECT dst \
                  FROM edge \
                  WHERE type = 3 and dst=%s",
-                 (taskphid,), limit=None)
+                 (taskPHID,), limit=None)
     p.close()
     if not _:
         return ''
@@ -726,6 +931,11 @@ def get_task_id_by_phid(taskid):
         return _[0][0]
 
 def set_task_id(id, phid):
+    """ specify task id
+    :param id: int of new id
+    :param phid: phid of existing issue
+    :notes: this the primary key
+    """
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
@@ -852,7 +1062,7 @@ def remove_reference(refname):
     return _[0]
 
 def email_by_userphid(userphid):
-    """
+    """ lookup email info by userphid
     userPHID: PHID-USER-egea763uwv723xifsfya
     address: foo@fastmail.fm
     isVerified: 1
@@ -901,9 +1111,9 @@ def comment_by_transaction(comment_xact):
     p.close()
     return comtx
 
-def comment_transactions_by_task_phid(taskphid):
+def comment_transactions_by_task_phid(taskPHID):
     """ get comment transactions for an issue
-    :param taskphid: str
+    :param taskPHID: str
     """
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
@@ -912,7 +1122,7 @@ def comment_transactions_by_task_phid(taskphid):
                     from maniphest_transaction \
                     where objectPHID = %s \
                     AND transactionType = 'core:comment'",
-                    taskphid, limit=None)
+                    taskPHID, limit=None)
     p.close()
     return coms
 
@@ -991,6 +1201,9 @@ def set_project_policy(projphid, view, edit):
     p.close()
 
 def get_project_phid(project):
+    """ get project phid by name
+    :param project: str
+    """
     p = phdb(db='phabricator_project',
              user=phuser_user,
              passwd=phuser_passwd)
@@ -1031,6 +1244,7 @@ def set_task_author(authorphid, id):
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
+
     p.sql_x("UPDATE maniphest_task \
              SET authorPHID=%s \
              WHERE id=%s", (authorphid, id))
@@ -1048,6 +1262,8 @@ def set_task_author(authorphid, id):
              (authorphid, transxphid))
     p.close()
 
+
+
 def add_task_cc_by_ref(userphid, oldid, prepend):
     """ set user as cc'd by a task
     :param userphid: str
@@ -1058,6 +1274,7 @@ def add_task_cc_by_ref(userphid, oldid, prepend):
                                       oldid))
     if not refs:
         return
+
     return add_task_cc(refs[0], userphid)
 
 def add_task_cc(ticketphid, userphid):
@@ -1085,19 +1302,25 @@ def add_task_cc(ticketphid, userphid):
     p.close()
     return json.loads(final_jcclist[0])
 
-def set_task_subscriber(taskphid, userphid):
+def set_task_subscriber(taskPHID, userphid):
+    """ establishes a user as a subscriber of a task
+    :param taskPHID: str
+    :param userphid: str
+    """
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
+
     query = "SELECT taskPHID, subscriberPHID \
              from maniphest_tasksubscriber \
              where taskPHID=%s and subscriberPHID=%s"
-    existing = p.sql_x(query, (taskphid, userphid))
+
+    existing = p.sql_x(query, (taskPHID, userphid))
     # Note only bad to do dupe inserts columns are UNIQUE
     if existing is None:
         p.sql_x("INSERT INTO maniphest_tasksubscriber \
                  (taskPHID, subscriberPHID) VALUES (%s, %s)",
-                 (taskphid, userphid))
+                 (taskPHID, userphid))
     p.close()
 
 

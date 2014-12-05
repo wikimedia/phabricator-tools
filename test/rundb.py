@@ -3,8 +3,13 @@ path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('/'.join(path.split('/')[:-1]))
 from wmfphablib import phabdb
 from wmfphablib import util
-
-print util.remove_issue_by_bugid(sys.argv[1], 'rt')
+policyPHID = phabdb.create_policy(allowedUSERS=["PHID-USER-qjvgbwgjbko3uqjd6qxs","PHID-USER-3bhvz52nbc2bblxj6tz5","PHID-USER-5c7hmjvo4ncll374kjpm"],
+                                  allowedProjects=["PHID-PROJ-xdhc4tn6wzks6xaz5pwq"])
+print policyPHID
+taskPHID = phabdb.get_task_phid_by_id(100039)
+print taskPHID
+phabdb.set_task_policy(taskPHID, policyPHID)
+#print util.remove_issue_by_bugid(sys.argv[1], 'rt')
 exit()
 
 email_tuples =  phabdb.get_verified_emails()

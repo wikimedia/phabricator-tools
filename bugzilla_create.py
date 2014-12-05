@@ -72,12 +72,9 @@ def create(bugid):
     vlog(bugid)
     vlog(buginfo)
 
-    def is_sensitive(name):
-        return name.strip().lower().startswith('security')
-
     buginfo["secstate"] = 'none'
     # And the relevant herald rule must be in place.
-    if is_sensitive(buginfo["product"]):
+    if bzlib.is_sensitive(buginfo["product"]):
         buginfo["secstate"] = 'security-bug'
         log("found security-bug issue %s" % (bugid,))
 
@@ -246,7 +243,7 @@ def create(bugid):
             ptags.append((k, 'tags'))
 
     def project_security_settings(pname):
-        if is_sensitive(pname):
+        if bzlib.is_sensitive(pname):
             ephid = phabdb.get_project_phid('security')
             edit = ephid
         else:
