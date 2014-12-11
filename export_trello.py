@@ -46,7 +46,7 @@
 #   ._-~//( )/ )) `                    ~~-'_/_/ /~~~~~~~__--~
 #    ;'( ')/ ,)(                              ~~~~~~~~~~
 #   ' ') '( (/
-#     '   '  `                                        
+#     '   '  `
 
 # This script uses a trello enterprise export which even if you have
 # an enterprise account is different from what you get by hitting the
@@ -85,7 +85,7 @@ def mkdir_p(path):
 # handling such a mess?
 def parse_trello_ts_str(s):
     d = dateutil.parser.parse(s)
-    return calendar.timegm(d.utctimetuple()) 
+    return calendar.timegm(d.utctimetuple())
 
 
 def s_to_us(ts):
@@ -99,14 +99,38 @@ class TrelloDAO(object):
     def __init__(self, fname):
         with open(fname) as f:
             self.blob = json.load(f)
+        self.uid2label = None
         self.uid2username = None
         self.column_id2name = None
+
+    def get_board_id(self):
+        return self.blob['id']
 
     def get_board_name(self):
         return self.blob['name']
 
     def get_board_url(self):
         return self.blob['url']
+
+    # Label definitions. Like members, an array of dicts
+    def get_labelnames(self):
+        labelnames = []
+        for label in self.blob['labels']:
+            # TODO? the label['idBoard'] might not be the current board, but if it's unique maybe write it anyway.
+            labelnames.append('%s (%s)' % (label['name'],label['color']))
+        return sorted(labelnames)
+
+    # Returns a string for the Trello label.
+    def get_label(self, uid):
+        if self.uid2label is None:
+            self.uid2label = {}
+            for label in self.blob['labels']:
+                self.uid2label[label['id']] = ('%s (%s)' % (label['name'],label['color']))
+        if uid in self.uid2label:
+            return self.uid2label[uid]
+        else:
+            return 'UNKNOWN_LABEL_' + uid
+
 
     def get_usernames(self):
         usernames = []
@@ -129,7 +153,17 @@ class TrelloDAO(object):
             self.column_id2name = {}
             for t_list in self.blob['lists']:
                 self.column_id2name[t_list['id']] = t_list['name']
-        return self.column_id2name[column_id]
+        # This failed in card 108 of a simple Trello export, referencing a
+        # "Done" column that is no longer part of this board, or maybe the card
+        # was on a different board.
+        try:
+            column_name = self.column_id2name[column_id]
+        except KeyError as e:
+            log.warn('get_column_name found no name for column id' + column_id)
+            column_name = 'NOTFOUND-'+column_id
+            self.column_id2name[column_id] = column_name
+        return column_name
+
 
     # due to cards moving and whatnot constraints like 'there should
     # be a created record for each card' can not be satisfied
@@ -170,6 +204,7 @@ class TrelloDAO(object):
             if action['type'] == 'createCard':
                 if action['data']['card']['id'] == card.card_id:
                     reporter = scrubber.get_phab_uid(self.get_username(action['idMemberCreator']))
+                    # TODO: spagewmf: found a reporter, break out of the loop
         if reporter is None and card.idMembers:
             reporter = scrubber.get_phab_uid(self.get_username(card.idMembers[0]))
         return reporter if reporter else 'import-john-doe'
@@ -190,8 +225,9 @@ class TrelloDAO(object):
         return sorted(subscribers)
 
 
+    # Note: this method is unused.
     def get_checklist_items(self, card_id):
-        for c_list in self.blob['checklists']:
+        for c_list in self.blob['checklists']:  # TODO Only in Enterprise export, not available in board export
             if c_list['idCard'] == card_id:
                 check_items = c_list['checkItems']
                 return sorted(check_items, key=lambda e: e['pos'])
@@ -217,28 +253,35 @@ class TrelloScrubber(object):
         # as members or anywhere within in the export
         if trello_username.startswith('UNKNOWN_'):
             junk = trello_username.split('UNKNOWN_')[1]
-            return self.conf['uid-cheatsheet'][junk]
+            if junk in self.conf['uid-cheatsheet']:
+                return self.conf['uid-cheatsheet'][junk]
+            else:
+                return 'FAILED-'+trello_username    # TODO log error
         else:
-            return self.conf['uid-map'][trello_username]
+            if trello_username in self.conf['uid-map']:
+                return self.conf['uid-map'][trello_username]
+            else:
+                return 'FAILED-'+trello_username    # TODO log error
 
 
 class TrelloCard(object):
 
-    # [u'attachments',  Never used on board
-    #  u'labels',  Rarely used color stuff
+    # [u'attachments',  list of attachments # TODO handle attachment images!
+    #  u'labels',   Old way of representing label colors.
+    #  u'idLabels',  array of ids of labels for card (usually only one)
     #  u'pos',  Physical position, ridiculous LOE to port so ignoring
     #  u'manualCoverAttachment',  Duno but it's always false
     #  u'id',  unique id
     #  u'badges',   something about fogbugz integration?
     #  u'idBoard',  parent board id
     #  u'idShort',  "short" and thus not unique uid
-    #  u'due',  rarely used durdate
+    #  u'due',  rarely used duedate
     #  u'shortUrl',  pre-shorted url
     #  u'closed',  boolean for if it's archived
     #  u'subscribed',  boolean, no idea what it means
     #  u'email',  no idea, always none
     #  u'dateLastActivity',  2014-04-22T14:09:49.917Z
-    #  u'idList',  it's an id, not sure exactly how it works
+    #  u'idList',  it's the ID of the current column of the card
     #  u'idMembersVoted',  never used
     #  u'idMembers',  # Whose face shows up next to it
     #  u'checkItemStates',  Something to do with checklists?
@@ -253,7 +296,11 @@ class TrelloCard(object):
     def __init__(self, blob, scrubber):
         self.scrubber = scrubber
         self.card_id = blob['id']
-        self.labels = blob['labels']
+        if "labels" in blob:
+            self.labels = blob['labels']
+        else:
+            self.labels = []
+        self.idLabels = blob['idLabels']
         self.idBoard = blob['idBoard']
         self.due = blob['due']
         self.closed = blob['closed']
@@ -263,9 +310,26 @@ class TrelloCard(object):
         self.desc = blob['desc']
         self.name = blob['name']
         self.url = blob['url']
+        # Board export has shortUrl and shortLink, but Enterprise export doesn't - crazy.
+        if 'shortUrl' in blob:
+            self.shortUrl = blob['shortUrl']
+        else:
+            # Trim the end off e.g. https://trello.com/c/mpFNXCXp/464-long-title-here
+            self.shortUrl = self.url[0:self.url.rfind('/')]
+        if 'shortLink' in blob:
+            self.shortLink = blob['shortLink']
+        else:
+            # Again, the last piece.
+            self.shortLink = self.shortUrl[self.shortUrl.rfind('/')+1:]
+
         self.idChecklists = blob['idChecklists']
-        self.checklists = blob['checklists']
-        
+        if 'checklists' in blob:
+            self.checklists = blob['checklists']
+        else:
+            # TODO Only in Enterprise export, not available in board export
+            self.checklists = None
+
+        self.checklist_strs = []
         self.change_history = []
         self.column = None
         self.final_comment_fields = {}
@@ -283,8 +347,17 @@ class TrelloCard(object):
         for action in dao.get_relevant_actions(self.card_id):
             self.handle_change(action, dao)
 
+        self.column = dao.get_column_name(self.idList)
+        # labels is text, idLabels is UIDs, append them to the end.
+        label_comment = ''
         if self.labels:
-            self.final_comment_fields['labes'] = sorted(map(lambda k: k['color'], self.labels))
+            label_comment = sorted(map(lambda k: k['color'], self.labels))
+        if self.idLabels:
+            for label_id in self.idLabels:
+                label_comment = ' ' + dao.get_label(label_id)
+        if len(label_comment) > 0:
+            self.final_comment_fields['labels'] = label_comment
+
         if self.due:
             self.final_comment_fields['due'] = self.due
 
@@ -293,17 +366,21 @@ class TrelloCard(object):
             return None
         s = ''
         if self.checklists is None:
-            log.warning('Failed to find checklist %s for card %s' % self.card_id)
+            log.warning('Failed to find checklists for card %s' % self.card_id)
             return
         for checklist in self.checklists:
-            s += 'Checklist: \n'
+            headerText = checklist['name'] if ('name' in checklist) else 'Checklist'
+            s += '==== %s ====\n' % (headerText)
             for item in checklist['checkItems']:
                 s+= ' * [%s] %s \n' % ('x' if item['state'] == 'complete' else '', item['name'])
                 s += '\n'
         change = {'type': 'comment', 'author': self.owner,
                   'comment': s,
                   'change_time_us': s_to_us(parse_trello_ts_str(self.dateLastActivity))}
-        self.change_history.append(change)
+        # SPage: cburroughs turns the checklist into a comment:
+        # self.change_history.append(change)
+        # SPage: instead, add to checklists string
+        self.checklist_strs.append(s)
 
     def make_final_comment(self):
         s = 'Trello Board: %s `%s` \n' % (self.board_name, self.idBoard)
@@ -322,6 +399,8 @@ class TrelloCard(object):
                       'val': dao.get_column_name(j_change['data']['listAfter']['id']),
                       'change_time_us': s_to_us(parse_trello_ts_str(j_change['date']))}
             self.change_history.append(change)
+            # XXX This doesn't result in the card having the right column,
+            # elsewhere it's set to the column from the card's idList.
             self.column = dao.get_column_name(j_change['data']['listBefore']['id'])
         elif j_change['type'] == 'commentCard':
             change = {'type': 'comment',
@@ -352,10 +431,11 @@ class TrelloCard(object):
             self.change_history.append(change)
         elif j_change['type'] == 'updateCard' and 'old' in j_change['data'] and 'due' in j_change['data']['old']:
             pass # Will just use the final due date
+        elif j_change['type'] == 'updateCard' and 'old' in j_change['data'] and 'idAttachmentCover' in j_change['data']['old']:
+            pass # changing the cover image. TODO? could link to this image in self.desc
         elif j_change['type'] == 'updateCard' and 'old' in j_change['data'] and 'pos' in j_change['data']['old']:
             pass # just moving cards around in a list
         else:
-            print j_change
             log.warn('Unknown change condition type:%s id:%s for card %s' % (j_change['type'], j_change['id'], self.card_id))
 
     def to_transform_dict(self, import_project, task_id):
@@ -387,10 +467,16 @@ def cmd_foo(args):
     pass
 
 
+def cmd_print_labelnames(args):
+    board = TrelloDAO(args.trello_file)
+    pprint.pprint(board.get_labelnames())
+
+    pass
+
 def cmd_print_users(args):
     board = TrelloDAO(args.trello_file)
     pprint.pprint(board.get_usernames())
-    
+
     pass
 
 def cmd_print_user_map_test(args):
@@ -441,6 +527,9 @@ def parse_args(argv):
 
     foo_p = db_cmd(sub_p, 'foo', '')
     foo_p.set_defaults(func=cmd_foo)
+
+    print_labelnames_p = db_cmd(sub_p, 'print-labelnames', '')
+    print_labelnames_p.set_defaults(func=cmd_print_labelnames)
 
     print_users_p = db_cmd(sub_p, 'print-users', '')
     print_users_p.set_defaults(func=cmd_print_users)
