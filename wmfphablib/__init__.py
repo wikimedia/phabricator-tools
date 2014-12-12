@@ -29,6 +29,7 @@ def tflatten(t_of_tuples):
 ipriority = {'creation_failed': 6,
              'creation_success': 7,
              'fetch_failed': 5,
+             'fetch_success': 4,
              'na': 0,
              'denied': 2,
              'missing': 3,

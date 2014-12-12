@@ -145,20 +145,20 @@ def remove_issue_by_bugid(bugid, ref):
     out += str(phabdb.reference_ticket("%s%s" % (ref, bugid)))
     return out
 
-def return_bug_list(dbcon=None, priority=None):
+def return_bug_list(dbcon=None, priority=None, table='bugzilla_meta'):
 
     if sys.stdin.isatty():
         bugs = sys.argv[1:]
     else:
         bugs = sys.stdin.read().strip('\n').strip().split()
 
-    #if 'failed' in ''.join(sys.argv):
     if priority:
         if dbcon == None:
             print "cant find dbcon for priority buglist"
             return []
-        bugs = phabdb.get_issues_by_priority(dbcon, priority)
-        #bugs = phabdb.get_failed_creations(dbcon)
+        bugs = phabdb.get_issues_by_priority(dbcon,
+                                             priority,
+                                             table=table)
     elif '-' in bugs[0]:
         start, stop = bugs[0].split('-')
 
@@ -175,12 +175,10 @@ def return_bug_list(dbcon=None, priority=None):
 
     if not isinstance(bugs, list):
         print "Bug list not built"
-        return
+        return []
 
     #exclude known bad
     bugs = [b for b in bugs if b not in bzlib.missing]
 
     log("Bugs count: %d" % (len(bugs)))
-    if bugs is None:
-        return []
     return bugs

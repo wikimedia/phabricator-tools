@@ -125,6 +125,10 @@ create table task_relations (id INT, priority INT, blocks TEXT(1000), modified I
 
 Issue examples:
 
+Consistent Attachments:
+
+https://old-bugzilla.wikimedia.org/show_bug.cgi?id=72256
+
 BZ lots of attachments:
 
 https://bugzilla.wikimedia.org/show_bug.cgi?id=22881 has 11
@@ -139,3 +143,5 @@ https://bugzilla.wikimedia.org/show_bug.cgi?id=2 has 1
 RT ISSUES:
 
 https://rt.wikimedia.org/Ticket/Display.html?id=8175
+
+http://requesttracker.wikia.com/wiki/REST

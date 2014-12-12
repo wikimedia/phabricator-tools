@@ -53,8 +53,8 @@ def create(rtid):
     if current:
         import_priority, rtinfo, com, created, modified = current[0]
     else:
-        log('%s not present for migration' % (rtid,))
-        return 'missing'
+        elog('%s not present for migration' % (rtid,))
+        return False
 
     if not rtinfo:
         log("ignoring invalid data for issue %s" % (rtid,))
@@ -69,46 +69,13 @@ def create(rtid):
         log('reference ticket %s already exists' % (rtid,))
         return True
 
-    def remove_sig(content):
-        return re.split('--\s?\n', content)[0]
-
-    def uob(obj, encoding='utf-8'):
-        """ unicode or bust"""
-        if isinstance(obj, basestring):
-            if not isinstance(obj, unicode):
-                obj = unicode(obj, encoding)
-        return obj
-
-    def sanitize_text(line):
-        if line.strip() and not line.lstrip().startswith('>'):
-            # in remarkup having '--' on a new line seems to bold last
-            # line so signatures really cause issues
-            if all(map(lambda c: c in '-', line.strip())):
-                return '%%%{0}%%%'.format(line.strip())
-            elif line.strip() == '-------- Original Message --------':
-                return '%%%{0}%%%'.format(line.strip())
-            elif line.strip() == '---------- Forwarded message ----------':
-                return '%%%{0}%%%'.format(unicode(line.strip()))
-            elif line.strip().startswith('#'):
-                return uob('%%%') + uob(line.strip()) + uob('%%%')
-            else:
-                return uob(line).strip()
-        elif line.strip().startswith('>'):
-            quoted_content = line.lstrip('>').strip()
-            if not quoted_content.lstrip('>').strip():
-                return line.strip()
-            if all(map(lambda c: c in '-', quoted_content.lstrip('>').strip())):
-                return "> ~~"
-            else:
-                return uob(line.strip())
-        else:
-            vlog("ignoring content line %s" % (line,))
-            return None
-
     viewpolicy = phabdb.get_project_phid('WMF-NDA')
     if not viewpolicy:
         elog("View policy group not present: %s" % (viewpolicy,))
         return False
+
+    def remove_sig(content):
+        return re.split('--\s?\n', content)[0]
 
     # Example:
     # id: ticket/8175/attachments\n
@@ -120,6 +87,7 @@ def create(rtid):
         raise Exception("no attachment response: %s" % (rtid))
 
     history = response.get(path="ticket/%s/history?format=l" % (rtid,))
+
 
     rtinfo = json.loads(rtinfo)
     comments = json.loads(com)
@@ -137,7 +105,7 @@ def create(rtid):
             body, attached = attachsplit[0], attachsplit[1]
         else:
             body, attached = c, '0'
-        comment_dict[i]['text_body'] = unicode(body)
+        comment_dict[i]['text_body'] = body
         comment_dict[i]['attached'] = attached
 
     # Example:
@@ -207,11 +175,15 @@ def create(rtid):
     #taking attachment text and convert to tuple (name, content type, size)
     ainfo_ext = {}
     comments = re.split("\d+\/\d+\s+\(id\/.\d+\/total\)", history)
+    attachregex = '(.*)\.(\S{3,4})\s\((.*)\s\/\s(.*)\)'
     for k, v in ainfo_f.iteritems():
         # Handle general attachment case:
         # NO: 686318802.html (application/octet-stream / 19.5k),
         # YES: Summary_686318802.pdf (application/unknown / 215.3k),
-        extract = re.search('(.*)\.(\S{3,4})\s\((.*)\s\/\s(.*)\)', v)
+        print attachregex
+        print v
+        extract = re.search(attachregex, v)
+        print extract
         # due to goofy email handling of signature/x-header/meta info
         # it seems they sometimes
         # become malformed attachments.  Such as when a response into
@@ -223,55 +195,30 @@ def create(rtid):
         #    Private-l@lists.wikimedia.org
         #    https://lists.wikimedia.org/mailman/listinfo/private-l
         if extract:
-            fdetails = extract.groups()
-        if not extract and v.startswith('Attached Message Part'):
+            print "YES"
+            vlog(extract.groups())
+            ainfo_ext[k] = extract.groups()
+        elif not extract and v.startswith('Attached Message Part'):
             continue
-        if not extract:
-            extract = re.match('(\S+)\s\((.*)\/(.*)\),.*', v)
-            if not extract:
-                elog("attachment CORRUPT or FAILED extraction: %s %s (%s)" % (k, v, rtid))
-                continue
+        else:
+            elog("no attachment CORRUPT or FAILED extraction: %s %s (%s)" % (k, v, rtid))
+    print ainfo_ext
 
-            fdetails = extract.group(1), '', extract.group(2), extract.group(3)
-
-        if not fdetails:
-            elog("attachment CORRUPT or FAILED extraction: %s %s (%s)" % (k, v, rtid))
-            continue
-        ainfo_ext[k] = fdetails
-        vlog(ainfo_ext[k])
-
-    # deb
-    # cgi
     attachment_types = ['pdf',
                         'jpeg',
-                        'asc',
                         'tgz',
-                        'csr',
                         'jpg',
                         'png',
                         'xls',
-                        'xls',
-                        'csv',
-                        'docx',
+                        'xlsx',
                         'gif',
                         'html',
                         'htm',
                         'txt',
-                        'diff',
                         'log',
                         'zip',
                         'rtf',
-                        'tmpl',
                         'vcf',
-                        'pub',
-                        'sql',
-                        'odt',
-                        'p7s',
-                        'iso',
-                        'ods',
-                        'conf',
-                        'doc',
-                        'xff',
                         'eml']
 
     #Uploading attachment
@@ -280,41 +227,38 @@ def create(rtid):
     uploaded = {}
     for k, v in ainfo_ext.iteritems():
         file_extension = v[1].lower()
-
         # vendors have this weird habit of capitalizing extension names
         # make sure we can handle the extension type otherwise
-        #if file_extension not in attachment_types:
-        #    elog("Unknown Exception (%s) %s %s" % (rtid, v, file_extension))
-        #    #raise Exception('unknown extension: %s (%s)' % (v, rtid))
-
+        if file_extension not in attachment_types:
+            log("%s %s %s" % (rtid, v, file_extension))
+            raise Exception('unknown extension: %s (%s)' % (v, rtid))
         full = "ticket/%s/attachments/%s/content" % (rtid, k)
-        vcontent = response.get(path=full, headers={'Content-Type': v[2], 'Content-Length': v[3] })
-        #PDF's don't react well to stripping header -- fine without it
-        if file_extension.strip() == 'pdf':
-            sanscontent = ''.join(vcontent.readlines())
-        else:
-            vcontent = vcontent.readlines()
-            sanscontent = ''.join(vcontent[2:])
 
-        if file_extension:
-            fname = "%s.%s" % (v[0], file_extension)
-        else:
-            fname = v[0]
+        vcontent = response.get(path=full,
+                                headers={'Content-Type': v[2], 'Content-Length': v[3] })
+        try:
+            #PDF's don't react well to stripping header -- fine without it
+            if file_extension.strip() == 'pdf':
+                sanscontent = str(''.join(vcontent.readlines()))
+            else:
+                log("%s.%s" % (v[0], file_extension))
+                vcontent = str(vcontent.readlines())
+                sanscontent = ''.join(vcontent[2:])
+            upload = phabm.upload_file("%s.%s" % (v[0], file_extension),
+                                       sanscontent,
+                                      viewpolicy)
+            uploaded[k] = upload
 
-        upload = phabm.upload_file(fname,
-                                   sanscontent,
-                                   viewpolicy)
-        uploaded[k] = upload
+        except Exception as e:
+            print e
+            #elog("Attachment CORRUPT in source: %s" % (v[0] + file_extension,))
 
+    return
     if rtinfo['Queue'] not in rtlib.enabled:
         log("%s not in an enabled queue" % (rtid,))
         return True
 
     ptags = []
-
-    # In a practical sense ops-requets seemed to get tagged
-    # with straight Operations group in Phab so we backfill
-    # this for consistency.
     if rtinfo['Queue'] == 'ops-requests':
         ptags.append('operations')
 
@@ -342,13 +286,8 @@ def create(rtid):
     # much like bugzilla comment 0 is the task description
     header = comment_dict[comment_dict.keys()[0]]
     del comment_dict[comment_dict.keys()[0]]
-
-    dtext_san = []
-    dtext_list = header['body']['content'][0].splitlines()
-    for t in dtext_list:
-        dtext_san.append(sanitize_text(rtlib.shadow_emails(t)))
-    dtext = '\n'.join(filter(None, dtext_san))
-    #dtext = '\n'.join(filter(None, sanitize_text(rtlib.shadow_emails(dtext_list))))
+    dtext = '\n'.join([l.strip() for l in header['body']['content'][0].splitlines()])
+    dtext = rtlib.shadow_emails(dtext)
     full_description = "**Author:** `%s`\n\n**Description:**\n%s\n" % (rtinfo['Creator'].strip(),
                                                                        dtext)
 
@@ -358,26 +297,17 @@ def create(rtid):
     for at in hafound:
         if at in upfiles:
             header_attachments.append('{F%s}' % uploaded[at]['id'])
-    if 'CF.{Bugzilla ticket}' in rtinfo or header_attachments: 
+    if header_attachments:
         full_description += '\n__________________________\n\n'
-        if 'CF.{Bugzilla ticket}' in rtinfo and rtinfo['CF.{Bugzilla ticket}']:
-            obzurl = 'https://old-bugzilla.wikimedia.org/show_bug.cgi?id='
-            obz = "[[ %s%s | %s ]]" % (obzurl,
-                                       rtinfo['CF.{Bugzilla ticket}'],
-                                       rtinfo['CF.{Bugzilla ticket}'],)
-            bzref = int(rtinfo['CF.{Bugzilla ticket}'].strip())
-            newbzref = bzref + 2000
-            full_description += "Bugzilla Ticket: %s => %s\n" % (obz, '{T%s}' % (newbzref,))
-        if header_attachments:
-            full_description += '\n'.join(header_attachments)
+        full_description += '\n'.join(header_attachments)
 
     vlog("Ticket Info: %s" % (full_description,))
-    ticket =  phab.maniphest.createtask(title=rtinfo['Subject'],
-                                        description=full_description,
-                                        projectPHIDs=phids,
-                                        ccPHIDs=[],
-                                        priority=rtinfo['xpriority'],
-                                        auxiliary={"std:maniphest:external_reference":"rt%s" % (rtid,)})
+    ticket = phab.maniphest.createtask(title=rtinfo['Subject'],
+                                       description=full_description,
+                                       projectPHIDs=phids,
+                                       ccPHIDs=[],
+                                       priority=rtinfo['xpriority'],
+                                       auxiliary={"std:maniphest:external_reference":"rt%s" % (rtid,)})
 
     # XXX: perms
     botphid = phabdb.get_phid_by_username(config.phab_user)
@@ -389,7 +319,7 @@ def create(rtid):
     phabdb.set_task_ctime(ticket['phid'], rtlib.str_to_epoch(rtinfo['Created']))
     phabdb.set_task_policy(ticket['phid'], viewpolicy)
 
-    #vlog(str(ordered_comments))
+    vlog(str(ordered_comments))
     fmt_comments = {}
     for comment, contents in comment_dict.iteritems():
         fmt_comment = {}
@@ -402,15 +332,20 @@ def create(rtid):
             mailsan = rtlib.shadow_emails(dbody['content'][0])
             content_literal = []
             for c in mailsan.splitlines():
-                content_literal.append(sanitize_text(c))
-            content = '\n'.join(filter(None, content_literal))
+                if c.strip() and not c.lstrip().startswith('>'):
+                    # in remarkup having '--' on a new line seems to bold last
+                    # line so signatures really cause issues
+                    if c.strip() == '--':
+                        content_literal.append('%%%{0}%%%'.format(c.strip()))
+                    else:
+                        content_literal.append(unicode('{0}'.format(c.strip())))
+                elif c.strip():
+                    content_literal.append(c.strip())
+                else:
+                    vlog("ignoring content line %s" % (c,))
+            content = '\n'.join(content_literal)
 
-            # In case of attachment but not much else
-            if not content and dbody['attached']:
-                content = True
-
-        void_content = 'This transaction appears to have no content'
-        if not content == True and void_content in content:
+        if 'This transaction appears to have no content' in content:
             content = None
 
         auto_actions = ['Outgoing email about a comment recorded by RT_System',
@@ -420,18 +355,11 @@ def create(rtid):
             vlog("ignoring comment: %s/%s" % (dbody['description'], content))
             continue
 
-        preamble = ''
-        cbody = ''
+        preamble = unicode('')
+        cbody = unicode('')
         if content:
-            if dbody['creator'] is None:
-                dbody['creator'] = '//creator field not set in source//'
-            preamble += "`%s  wrote:`\n\n" % (dbody['creator'].strip(),)
-
-            if content == True:
-                content = ''
-            cbody += "%s" % (content.strip() or '//no content//',)
-
-        
+            preamble += unicode("`%s  wrote:`\n\n" % (dbody['creator'].strip(),))
+            cbody += unicode(content).strip() or 'no content'
         if dbody['nvalue'] or dbody['ovalue']:
             value_update = ''
             value_update_text = rtlib.shadow_emails(dbody['description'])
@@ -463,18 +391,10 @@ def create(rtid):
             cbody += '\n__________________________\n\n'
             cbody += '\n'.join(cbody_attachments)
             fmt_comment['xattached'] = cbody_attachments
+
         phabm.task_comment(ticket['id'], preamble + cbody)
         ctransaction = phabdb.last_comment(ticket['phid'])
-
-        try:    
-            created = rtlib.str_to_epoch_comments(dbody['created'])
-        except (ValueError, TypeError):
-            # A handful of issues seems to show NULL creation times
-            # for now reason: see 1953 for example of NULL
-            # 3001 for example of None
-            elog("Could not determine comment time for %s" % (rtid,))
-            dbody['created'] = rtlib.str_to_epoch(rtinfo['Created'])
-
+        created = rtlib.str_to_epoch_comments(dbody['created'])
         phabdb.set_comment_time(ctransaction,
                                 created)
         fmt_comment['xctransaction'] = ctransaction
@@ -488,7 +408,6 @@ def create(rtid):
     if rtinfo['Status'].lower() != 'open':
         log('setting %s to status %s' % (rtid, rtinfo['xstatus'].lower()))
         phabdb.set_issue_status(ticket['phid'], rtinfo['xstatus'].lower())
-
 
     log("Created task: T%s (%s)" % (ticket['id'], ticket['phid']))
     phabdb.set_task_mtime(ticket['phid'], rtlib.str_to_epoch(rtinfo['LastUpdated']))
@@ -535,8 +454,18 @@ def main():
         elog('%s reference field not editable on this install' % (rtid,))
         sys.exit(1)
 
+    if 'failed' in sys.argv:
+        priority = ipriority['creation_failed']
+    elif 'success' in sys.argv:
+        priority = ipriority['creation_success']
+    else:
+        priority = None
+
+    vlog("Grabbing for priority: %s" % (priority,))
     pmig = phdb(db=config.rtmigrate_db)
-    bugs = return_bug_list(dbcon=pmig)
+    bugs = return_bug_list(dbcon=pmig,
+                           priority=priority,
+                           table='rt_meta')
     pmig.close()
 
     #Serious business
@@ -548,10 +477,9 @@ def main():
     from multiprocessing import Pool
     pool = Pool(processes=int(config.bz_createmulti))
     _ =  pool.map(run_create, bugs)
-    missing = len([i for i in _ if i == 'missing'])
-    complete = len(filter(bool, [i for i in _ if i not in ['missing']]))
-    failed = (len(_) - missing) - complete
-    print '%s completed %s, missing %s, failed %s' % (sys.argv[0], complete, missing, failed)
+    complete = len(filter(bool, _))
+    failed = len(_) - complete
+    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
 
 if __name__ == '__main__':
     main()

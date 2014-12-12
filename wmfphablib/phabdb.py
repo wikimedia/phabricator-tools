@@ -73,16 +73,19 @@ def is_bz_security_issue(id):
     else:
         return False
 
-def get_issues_by_priority(dbcon, priority):
+def get_issues_by_priority(dbcon, priority, table):
     """ get failed creations
     :param dbcon: db connector
     :param priority: int
+    :param table: str
     :returns: list
     """
+    print table
+    print priority
     _ = dbcon.sql_x("SELECT id \
-                    from bugzilla_meta \
-                    where priority=%s",
-                    (priority,),
+                    from %s \
+                    where priority=%s" % (table, priority),
+                    (),
                     limit=None)
     if _ is None:
         return

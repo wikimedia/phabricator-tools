@@ -82,8 +82,10 @@ def priority_convert(priority):
 def status_convert(status):
     statuses = { 'resolved': 'resolved',
                  'new': 'open',
+                 'rejected': 'declined',
                  'open': 'open',
-                 'stalled': 'needsinfo'}
+                 'stalled': 'stalled',
+                 'deleted': 'invalid'}
     return statuses[status.lower()]
 
 def links_to_dict(link_text):
