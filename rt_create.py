@@ -358,7 +358,7 @@ def create(rtid):
     for at in hafound:
         if at in upfiles:
             header_attachments.append('{F%s}' % uploaded[at]['id'])
-    if 'CF.{Bugzilla ticket}' in rtinfo or header_attachments: 
+    if 'CF.{Bugzilla ticket}' in rtinfo and rtinfo['CF.{Bugzilla ticket}'] or header_attachments: 
         full_description += '\n__________________________\n\n'
         if 'CF.{Bugzilla ticket}' in rtinfo and rtinfo['CF.{Bugzilla ticket}']:
             obzurl = 'https://old-bugzilla.wikimedia.org/show_bug.cgi?id='
@@ -367,7 +367,7 @@ def create(rtid):
                                        rtinfo['CF.{Bugzilla ticket}'],)
             bzref = int(rtinfo['CF.{Bugzilla ticket}'].strip())
             newbzref = bzref + 2000
-            full_description += "Bugzilla Ticket: %s => %s\n" % (obz, '{T%s}' % (newbzref,))
+            full_description += "**Bugzilla Ticket**: %s => %s\n" % (obz, '{T%s}' % (newbzref,))
         if header_attachments:
             full_description += '\n'.join(header_attachments)
 
@@ -463,6 +463,7 @@ def create(rtid):
             cbody += '\n__________________________\n\n'
             cbody += '\n'.join(cbody_attachments)
             fmt_comment['xattached'] = cbody_attachments
+
         phabm.task_comment(ticket['id'], preamble + cbody)
         ctransaction = phabdb.last_comment(ticket['phid'])
 
@@ -483,7 +484,8 @@ def create(rtid):
         fmt_comment['created'] = created
         # XXX TRX both ways?
         #fmt_comment['creator'] = dbody['creator']user_lookup(name)
-        fmt_comments[created] = fmt_comment
+        cid =  len(fmt_comments.keys()) + 1
+        fmt_comments[cid] = fmt_comment
 
     if rtinfo['Status'].lower() != 'open':
         log('setting %s to status %s' % (rtid, rtinfo['xstatus'].lower()))
