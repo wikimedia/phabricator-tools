@@ -103,6 +103,7 @@ def links_to_dict(link_text):
     link_refs = {'refers_to': 'RefersTo:',
                  'refers_toby': 'ReferredToBy:',
                  'children': 'Members:',
+                 'parent': 'MemberOf',
                  'blockers': 'DependsOn',
                  'blocks': 'DependedOnBy'}
 

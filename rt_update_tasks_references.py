@@ -40,46 +40,32 @@ def update(bugid):
 
     blocker_ref = extref(bugid)
     tinfo = json.loads(header[0][0])
-    
-    upstream = []
 
-    if 'parent' in tinfo['links']:
-        upstream += tinfo['links']['parent']
+    if 'refers_to' in tinfo['links'] and tinfo['links']['refers_to']:
+        refers_to = []
+        for b in tinfo['links']['refers_to']:
+            refersto_ref = extref(b)
+            if not refersto_ref:
+                continue
+            refers_to.append(phabdb.get_task_id_by_phid(refersto_ref))
+        if refers_to:
+            refers_block = '\n\n**Refers To:**\n'
+            refers_block += '\n'.join(["{T%s}" % r for r in refers_to])
+            log(phabdb.append_to_task_description(blocker_ref,
+                                                    refers_block))
 
-    if 'blocks' in tinfo['links']:
-        upstream += tinfo['links']['blocks']
-
-    if upstream:
-        for b in upstream:
-            blocked_ref = extref(b)
-            log("%s is blocking %s" % (blocker_ref,
-                                       blocked_ref))
-            if blocked_ref:
-                log(phabdb.set_blocked_task(blocker_ref,
-                                        blocked_ref))
-            else:
-                log('%s is missing blocker %s' % (blocked_ref,
-                                              blocker_ref))
-    blocks = phabdb.get_tasks_blocked(blocker_ref)
-    vlog('%s is blocking %s' % (blocker_ref, str(blocks)))
-
-    current = pmig.sql_x("SELECT * \
-                          from task_relations \
-                          WHERE id = %s", bugid)
-    if current:
-        pmig.sql_x("UPDATE task_relations \
-                    SET priority=%s, blocks=%s, modified=%s \
-                    WHERE id = %s",
-                    (ipriority['update_success'],
-                    json.dumps(blocks),
-                    now(), bugid))
-    else:
-        sql = "INSERT INTO task_relations \
-               (id, priority, blocks, modified) \
-               VALUES (%s, %s, %s, %s)"
-        pmig.sql_x(sql, (bugid, ipriority['update_success'],
-                   json.dumps(blocks), now()))
-    pmig.close()
+    if 'refers_toby' in tinfo['links'] and tinfo['links']['refers_toby']:
+        refers_toby = []
+        for b in tinfo['links']['refers_toby']:
+            referstoby_ref = extref(b)
+            if not referstoby_ref:
+                continue
+            refers_toby.append(phabdb.get_task_id_by_phid(referstoby_ref))
+        if refers_toby:
+            refer_block = '\n\n**Referred To By:**\n'
+            refer_block += '\n'.join(["{T%s}" % r for r in refers_toby])
+            log(phabdb.append_to_task_description(blocker_ref,
+                                                    refer_block))
     return True
  
 

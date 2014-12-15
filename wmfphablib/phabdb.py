@@ -418,6 +418,22 @@ def set_task_ctime(taskPHID, ctime):
 
     p.close()
 
+def append_to_task_description(taskPHID, text):
+    """append text to  task description
+    :param taskPHID: str
+    """
+    description = get_task_description(taskPHID)
+    if not description:
+        return
+    newdescript = description + text
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    p.sql_x("UPDATE maniphest_task \
+             SET description=%s \
+             WHERE phid=%s", (newdescript, taskPHID))
+    p.close()
+
 def get_task_description(taskPHID):
     """get task description
     :param taskPHID: str
@@ -915,7 +931,7 @@ def get_blocking_tasks(taskPHID):
         return ''
     return _
 
-def get_task_id_by_phid(taskid):
+def get_task_id_by_phid(phid):
     """ get task id by phid
     :param taskid: str
     :returns: str
@@ -928,7 +944,7 @@ def get_task_id_by_phid(taskid):
     _ = p.sql_x("SELECT id \
                  from maniphest_task \
                  where phid=%s;",
-                 (taskid,), limit=None)
+                 (phid,), limit=None)
     p.close()
     if _ is not None and len(_[0]) > 0:
         return _[0][0]
