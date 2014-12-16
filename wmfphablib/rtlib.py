@@ -50,7 +50,9 @@ def project_translate(pname):
 
 def user_lookup(name):
     """ match user name in rt to user email"""
-    return users.get(name, None) or name
+    if not users:
+        raise Exception("RT PPL must be present to translate users!")
+    return users.get(name, '').strip()
 
 def shadow_emails(text):
     emails =  re.findall('([^@|\s]+@[^@]+\.[^@|\s]+)', text)

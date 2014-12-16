@@ -92,7 +92,7 @@ def create(rtid):
             elif line.strip().startswith('#'):
                 return uob('%%%') + uob(line.strip()) + uob('%%%')
             else:
-                return uob(line).strip()
+                return uob('%%%') + uob(line).strip() + uob('%%%')
         elif line.strip().startswith('>'):
             quoted_content = line.lstrip('>').strip()
             if not quoted_content.lstrip('>').strip():
@@ -436,6 +436,7 @@ def create(rtid):
             value_update = ''
             value_update_text = rtlib.shadow_emails(dbody['description'])
             value_update_text = value_update_text.replace('fsck.com-rt', 'https')
+
             relations = ['Reference by ticket',
                          'Dependency by',
                          'Reference to ticket',
@@ -478,13 +479,17 @@ def create(rtid):
 
         phabdb.set_comment_time(ctransaction,
                                 created)
+
         fmt_comment['xctransaction'] = ctransaction
         fmt_comment['preamble'] = preamble
         fmt_comment['content'] = cbody
         fmt_comment['created'] = created
+        fmt_comment['author'] = dbody['creator']
+
         # XXX TRX both ways?
         #fmt_comment['creator'] = dbody['creator']user_lookup(name)
         cid =  len(fmt_comments.keys()) + 1
+        fmt_comment['count'] = cid
         fmt_comments[cid] = fmt_comment
 
     if rtinfo['Status'].lower() != 'open':

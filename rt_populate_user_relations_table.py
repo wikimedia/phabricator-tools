@@ -20,12 +20,15 @@ from wmfphablib import return_bug_list
 
 
 def populate(rtid):
-    pmig = phabdb.phdb(db=config.rtmigrate_db)
+
+    pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
 
     issue = pmig.sql_x("SELECT id FROM rt_meta WHERE id = %s", rtid)
     if not issue:
         log('issue %s does not exist for user population' % (rtid,))
-        return True
+        return 'missing'
 
     fpriority= pmig.sql_x("SELECT priority FROM rt_meta WHERE id = %s", rtid)
     if fpriority[0] == ipriority['fetch_failed']:
@@ -45,18 +48,18 @@ def populate(rtid):
     relations['author'] = rtlib.user_lookup(header["Creator"])
     ccusers = header['AdminCc'].split(',') + header['Cc'].split(',')
     relations['cc'] = ccusers
+    relations['cc'] = [cc.strip() for cc in relations['cc'] if cc]
     # RT uses a literal nobody for no assigned
     if header['Owner'] == 'Nobody':
         relations['owner'] = ''
     else:
         relations['owner'] = rtlib.user_lookup(header['Owner'])
 
-
     for k, v in relations.iteritems():
         if relations[k]:
             relations[k] = filter(bool, v)
 
-    def add_owner(owner):    
+    def add_owner(owner):
         ouser = pmig.sql_x("SELECT user FROM user_relations WHERE user = %s", (owner,))
         if ouser:
             jassigned = pmig.sql_x("SELECT assigned FROM user_relations WHERE user = %s", (owner,))
@@ -164,12 +167,21 @@ def run_populate(rtid, tries=1):
 
 def main():
     bugs = return_bug_list()
-    from multiprocessing import Pool
-    pool = Pool(processes=10)
-    _ =  pool.map(run_populate, bugs)
-    complete = len(filter(bool, _))
-    failed = len(_) - complete
-    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
+    result = []
+    for b in bugs:
+        result.append(run_populate(b))
+
+    missing = len([i for i in result if i == 'missing'])
+    complete = len(filter(bool, [i for i in result if i not in ['missing']]))
+    failed = (len(result) - missing) - complete
+    print '-----------------------------\n \
+          %s Total %s (missing %s)\n \
+          completed %s, failed %s' % (sys.argv[0],
+                                                          len(bugs),
+                                                          missing,
+                                                          complete,
+                                                          failed)
 
 if __name__ == '__main__':
     main()
+

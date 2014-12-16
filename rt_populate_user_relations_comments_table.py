@@ -7,6 +7,7 @@ import collections
 from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import phabdb
+from wmfphablib import rtlib
 from wmfphablib import log
 from wmfphablib import vlog
 from wmfphablib import errorlog as elog
@@ -47,30 +48,37 @@ def populate(bugid):
             pmig.sql_x("INSERT INTO user_relations_comments (user, issues, created, modified) VALUES (%s, %s, %s, %s)",
                        insert_values)
 
-    pmig = phabdb.phdb(db=config.bzmigrate_db)
-    issue = pmig.sql_x("SELECT id FROM bugzilla_meta WHERE id = %s", bugid)
+
+    pmig = phabdb.phdb(db=config.rtmigrate_db,
+                       user=config.rtmigrate_user,
+                       passwd=config.rtmigrate_passwd)
+
+    issue = pmig.sql_x("SELECT id FROM rt_meta WHERE id = %s", bugid)
     if not issue:
         log('issue %s does not exist for user population' % (bugid,))
         return True
 
-    fpriority= pmig.sql_x("SELECT priority FROM bugzilla_meta WHERE id = %s", bugid)
+    fpriority= pmig.sql_x("SELECT priority FROM rt_meta WHERE id = %s", bugid)
     if fpriority[0] == ipriority['fetch_failed']:
         log('issue %s does not fetched successfully for user population (failed fetch)' % (bugid,))
         return True
 
-    current = pmig.sql_x("SELECT comments, xcomments, modified FROM bugzilla_meta WHERE id = %s", bugid)
+    current = pmig.sql_x("SELECT comments, xcomments, modified FROM rt_meta WHERE id = %s", bugid)
     if current:
         comments, xcomments, modified = current[0]
     else:
         log('%s not present for migration' % (bugid,))
-        return True
+        return 'missing'
 
     com = json.loads(comments)
     xcom = json.loads(xcomments)
-    commenters = [c['author'] for c in com if c['count'] > 0]
-    commenters = set(commenters)
+    # rtlib.user_lookup(header["Creator"])
+    commenters = [rtlib.user_lookup(c['author']) for c in xcom.values() if c['count'] > 0]
+    commenters = set(filter(bool, commenters))
+    print commenters
     log("commenters for issue %s: %s" % (bugid, str(commenters)))
     for c in commenters:
+        print c
         add_comment_ref(c)
     pmig.close()
     return True
@@ -89,14 +97,22 @@ def run_populate(bugid, tries=1):
         elog('failed to populate %s' % (bugid,))
         return run_populate(bugid, tries=tries)
 
+
 def main():
     bugs = return_bug_list()
-    from multiprocessing import Pool
-    pool = Pool(processes=10)
-    _ =  pool.map(run_populate, bugs)
-    complete = len(filter(bool, _))
-    failed = len(_) - complete
-    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
+    result = []
+    for b in bugs:
+        result.append(run_populate(b))
 
+    missing = len([i for i in result if i == 'missing'])
+    complete = len(filter(bool, [i for i in result if i not in ['missing']]))
+    failed = (len(result) - missing) - complete
+    print '-----------------------------\n \
+          %s Total %s (missing %s)\n \
+          completed %s, failed %s' % (sys.argv[0],
+                                                          len(bugs),
+                                                          missing,
+                                                          complete,
+                                                          failed)
 if __name__ == '__main__':
     main()
