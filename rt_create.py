@@ -105,6 +105,7 @@ def create(rtid):
             vlog("ignoring content line %s" % (line,))
             return None
 
+    botphid = phabdb.get_phid_by_username(config.phab_user)
     viewpolicy = phabdb.get_project_phid('WMF-NDA')
     if not viewpolicy:
         elog("View policy group not present: %s" % (viewpolicy,))
@@ -380,7 +381,6 @@ def create(rtid):
                                         auxiliary={"std:maniphest:external_reference":"rt%s" % (rtid,)})
 
     # XXX: perms
-    botphid = phabdb.get_phid_by_username(config.phab_user)
     phabdb.set_task_title_transaction(ticket['phid'],
                                       botphid,
                                       'public',
@@ -485,9 +485,9 @@ def create(rtid):
         fmt_comment['content'] = cbody
         fmt_comment['created'] = created
         fmt_comment['author'] = dbody['creator']
+        fmt_comment['creator'] = rtlib.user_lookup(dbody['creator'])
 
         # XXX TRX both ways?
-        #fmt_comment['creator'] = dbody['creator']user_lookup(name)
         cid =  len(fmt_comments.keys()) + 1
         fmt_comment['count'] = cid
         fmt_comments[cid] = fmt_comment

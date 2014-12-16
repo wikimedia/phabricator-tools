@@ -5,7 +5,6 @@ import time
 import json
 import multiprocessing
 import sys
-import collections
 from phabricator import Phabricator
 from wmfphablib import Phab as phabmacros
 from wmfphablib import phabdb
@@ -15,11 +14,9 @@ from wmfphablib import bzlib
 from wmfphablib import config
 from wmfphablib import vlog
 from wmfphablib import errorlog as elog
-from wmfphablib import epoch_to_datetime
 from wmfphablib import ipriority
 from wmfphablib import now
 from wmfphablib import return_bug_list
-from wmfphablib import ipriority
 
 
 def update(user):
@@ -39,33 +36,40 @@ def update(user):
         log("%s is a bot no action" % (user['user']))
         return True
 
-    epriority = phabdb.get_user_relations_comments_priority(user['user'], pmig)
+    epriority = phabdb.get_user_relations_comments_priority(user['user'],
+                                                            pmig)
     if epriority and len(epriority[0]) > 0:
-        if epriority[0][0] == ipriority['update_success']:
+        if epriority[0][0] == ipriority['update_success_comments']:
             log('Skipping %s as already updated' % (user['user']))
-            #return True
+            return True
 
     if not user['issues']:
         log("%s has no issues to update" % (user['user'],))
         return True
 
     for i in user['issues']:
-        comdetails = pmig.sql_x("SELECT comments, xcomments FROM bugzilla_meta WHERE id = %s", (int(i),))
+        comdetails = pmig.sql_x("SELECT comments, \
+                                        xcomments \
+                                        FROM rt_meta \
+                                        WHERE id = %s", (int(i),))
         jcom, jxcom = comdetails[0]
         coms = json.loads(jcom)
         xcoms = json.loads(jxcom)
 
         for key, xi in xcoms.iteritems():
-            com = coms[util.get_index(coms, "count", int(key))]
-            content = com['text']
-            if com["creator"] == user['user']:
+            content = xi['content']
+            if xi["creator"] == user['user']:
                 log("Updating comment %s for %s" % (xi['xctransaction'], user['user']))
                 phabdb.set_comment_author(xi['xctransaction'], user['userphid'])
-                phabdb.set_comment_content(xi['xctransaction'], content + xi['xattached'])
+                phabdb.set_comment_content(xi['xctransaction'], xi['content'])
 
-    current = phabdb.get_user_migration_comment_history(user['user'], pmig)
+    current = phabdb.get_user_migration_comment_history(user['user'],
+                                                        pmig)
     if current:
-        log(phabdb.set_user_relations_comments_priority(ipriority['update_success'], user['user'], pmig))
+        success = ipriority['update_success_comments']
+        log(phabdb.set_user_relations_comments_priority(success,
+                                                        user['user'],
+                                                        pmig))
     else:
         log('%s user does not exist to update' % (user['user']))
         return False
@@ -78,9 +82,13 @@ def run_update(user, tries=1):
         pmig = phabdb.phdb(db=config.rtmigrate_db,
                        user=config.rtmigrate_user,
                        passwd=config.rtmigrate_passwd)
-        current = phabdb.get_user_migration_history(user['user'], pmig)
+        current = phabdb.get_user_migration_history(user['user'],
+                                                    pmig)
         if current:
-           log(phabdb.set_user_relations_priority(ipriority['update_failed'], user['user'], pmig))
+           failed = ipriority['update_failed_comments']
+           log(phabdb.set_user_relations_priority(failed,
+                                                  user['user'],
+                                                  pmig))
         else:
             log('%s user does not exist to update' % (user['user']))
         pmig.close()
@@ -104,7 +112,8 @@ def get_user_histories(verified):
 
     for v in verified:
         vlog(str(v))
-        saved_history = phabdb.get_user_migration_comment_history(v[1], pmig)
+        saved_history = phabdb.get_user_migration_comment_history(v[1],
+                                                                  pmig)
         if not saved_history:
             log('%s verified email has no saved history' % (v[1],))
             continue
@@ -135,7 +144,8 @@ def main():
 
     if args.a:
         starting_epoch = phabdb.get_user_relations_comments_last_finish(pmig)
-        users, finish_epoch = phabdb.get_verified_users(starting_epoch, config.bz_updatelimit)
+        users, finish_epoch = phabdb.get_verified_users(starting_epoch,
+                                                        config.bz_updatelimit)
     elif args.email:
         users = phabdb.get_verified_user(args.email)
         starting_epoch = 0
@@ -174,23 +184,18 @@ def main():
                                 starting_epoch,
                                 user_count, issue_count, pmig)
 
-
     from multiprocessing import Pool
-
     pool = Pool(processes=int(config.bz_updatemulti))
     _ =  pool.map(run_update, histories)
     complete = len(filter(bool, _))
     failed = len(_) - complete
     phabdb.user_relations_finish(pid,
                                  int(time.time()),
-                                 ipriority['update_success'],
+                                 ipriority['update_success_comments'],
                                  finish_epoch,
                                  complete,
                                  failed,
                                  pmig)
-
-    pm = phabmacros(config.phab_user, config.phab_cert, config.phab_host)
-    vlog(util.update_blog(source, complete, failed, user_count, issue_count, pm))
 
     pmig.close()
     print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)

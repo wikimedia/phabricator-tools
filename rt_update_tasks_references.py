@@ -29,8 +29,8 @@ def update(bugid):
     query = "SELECT header FROM rt_meta WHERE id = %s"
     header = pmig.sql_x(query, (bugid,))
     if not header:
-       elog('no header found for %s' % (bugid,))
-       return False
+       log('no header found for %s' % (bugid,))
+       return 'missing'
 
     def extref(ticket):
         refid = phabdb.reference_ticket("%s%s" % (rtlib.prepend, ticket))

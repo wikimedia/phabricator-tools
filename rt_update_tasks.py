@@ -30,7 +30,7 @@ def update(bugid):
     header = pmig.sql_x(query, (bugid,))
     if not header:
        elog('no header found for %s' % (bugid,))
-       return False
+       return 'missing'
 
     def extref(ticket):
         refid = phabdb.reference_ticket("%s%s" % (rtlib.prepend, ticket))
@@ -122,10 +122,16 @@ def main():
     bugs = return_bug_list()
     from multiprocessing import Pool
     pool = Pool(processes=int(config.bz_updatemulti))
-    _ =  pool.map(run_update, bugs)
-    complete = len(filter(bool, _))
-    failed = len(_) - complete
-    print '%s completed %s, failed %s' % (sys.argv[0], complete, failed)
-
+    result =  pool.map(run_update, bugs)
+    missing = len([i for i in result if i == 'missing'])
+    complete = len(filter(bool, [i for i in result if i not in ['missing']]))
+    failed = (len(result) - missing) - complete
+    print '-----------------------------\n \
+          %s Total %s (missing %s)\n \
+          completed %s, failed %s' % (sys.argv[0],
+                                                          len(bugs),
+                                                          missing,
+                                                          complete,
+                                                          failed)
 if __name__ == '__main__':
     main()

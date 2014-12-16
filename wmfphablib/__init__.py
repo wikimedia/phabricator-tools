@@ -34,7 +34,9 @@ ipriority = {'creation_failed': 6,
              'denied': 2,
              'missing': 3,
              'update_success': 8,
+             'update_success_comments': 10,
              'update_failed': 9,
+             'update_failed_comments': 11,
              'unresolved': 1}
 
 def save_attachment(name, data):
