@@ -80,8 +80,6 @@ def get_issues_by_priority(dbcon, priority, table):
     :param table: str
     :returns: list
     """
-    print table
-    print priority
     _ = dbcon.sql_x("SELECT id \
                     from %s \
                     where priority=%s" % (table, priority),
@@ -640,13 +638,13 @@ def add_task_policy_users(taskPHID,
     """
 
     # Assume view policy is canonical
-    viewPolicy = get_task_view_policy(taskPHID)
+    editPolicy = get_task_edit_policyPHID(taskPHID)
 
     # these are special policy strings
-    if viewPolicy in ['public', 'users']:
+    if editPolicy in ['public', 'users']:
         return ''
-    elif viewPolicy.startswith('PHID-PLCY'):
-        jrules = get_policy(viewPolicy)
+    elif editPolicy.startswith('PHID-PLCY'):
+        jrules = get_policy(editPolicy)
         rules = json.loads(jrules)
         for p in rules:
             if p['rule'] == "PhabricatorPolicyRuleUsers":
@@ -669,7 +667,7 @@ def add_task_policy_users(taskPHID,
                 break
         else:
             allowedProjects = []
-    elif viewPolicy.startswith('PHID-PROJ'):
+    elif editPolicy.startswith('PHID-PROJ'):
         allowedUSERS = users
         allowedProjects = [viewPolicy]
 
@@ -685,7 +683,6 @@ def get_task_edit_policyPHID(taskPHID):
     :param taskPHID: str
     :returns: str
     """
-
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
@@ -702,7 +699,6 @@ def get_task_view_policy(phid):
     :param taskPHID: str
     :returns: str
     """
-
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
@@ -1020,11 +1016,13 @@ def get_user_email_info(emailaddress):
     p = phdb(db='phabricator_user',
              user=phuser_user,
              passwd=phuser_passwd)
+
     query = "SELECT userPHID, address, isVerified \
            from user_email where address=%s"
     _ = p.sql_x(query, emailaddress)
     p.close()
-    return _[0] or ''
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
 
 def get_verified_users(modtime, limit=None):
     #Find the task in new Phabricator that matches our lookup
