@@ -18,9 +18,10 @@ multi = 10
 limit = 30
 
 [phab]
-host = https://bugzilla.wmflabs.org/api/
-certificate = ''
+host = https://phab-01.wmflabs.org/api/
 username = mybot
+; Get certificate for username from <host>/settings/panel/conduit/ after logging in.
+certificate = ''
 
 [oldfab]
 cert = asdf
