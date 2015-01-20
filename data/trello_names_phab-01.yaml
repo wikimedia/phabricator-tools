@@ -1,0 +1,10 @@
+# Map usernames in Trello to usernames on phab-01.wmflabs.org
+# To get Trello usernames you can use, e.g.
+#   python export_trello.py print-users --trello-file SOMEtrello_board_export.json
+# To get Phabricator usernames you can e.g. go to a project and look for members and CCs.
+trelloUserMap:
+    gtisza: Tgr
+    legoktm: legoktm
+    matthewflaschen: mattflaschen
+    pauginer: 
+    spage1: spage
