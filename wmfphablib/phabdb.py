@@ -518,6 +518,13 @@ def set_related_project(taskPHID, projphid):
     p.close()
     return get_task_projects(taskPHID)
 
+def remove_project_tasks(projectPHID):
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    p.sql_x("DELETE from edge where dst=%s", (projectPHID))
+    p.close()
+
 def phid_hash():
     """get a random hash for PHID building"""
     return os.urandom(20).encode('hex')[:20]
@@ -1216,6 +1223,21 @@ def set_project_policy(projphid, view, edit):
                               edit,
                               projphid))
     p.close()
+
+def get_project_tasks(projectPHID):
+    """ get project phid by name
+    :param projectPHID: str
+    """
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    _ = p.sql_x("SELECT src from edge \
+                 WHERE dst=%s", (projectPHID), limit=None)
+    p.close()
+    if _ is None:
+        return []
+    p_ = list(util.tflatten(_))
+    return p_
 
 def get_project_phid(project):
     """ get project phid by name
