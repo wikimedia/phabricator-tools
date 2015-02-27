@@ -3,8 +3,13 @@
 #   python export_trello.py print-users --trello-file SOMEtrello_board_export.json
 # To get Phabricator usernames you can e.g. go to a project and look for members and CCs.
 trelloUserMap:
+    dartar: DarTar
     gtisza: Tgr
+    kristenlans1: KLans
+    jonrobson1: jdlrobson
     legoktm: legoktm
+    maryanapinchuk: Maryana
     matthewflaschen: mattflaschen
     pauginer: 
+    robm17: rmoen
     spage1: spage

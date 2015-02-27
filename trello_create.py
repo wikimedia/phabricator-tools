@@ -12,8 +12,9 @@
 #   test Phab host phab-01.wmflabs.org and then for reals on the production Phab
 #   host phabricator.wikimedia.org.)
 #
-#   2. Modify /etc/phabtools.conf for either test host phab-01.wmflabs.org or
-#      production host phabricator.wikimedia.org.
+#   2. Modify /etc/phabtools.conf for
+#      * host= either phab-01.wmflabs.org (test) or phabricator.wikimedia.org (production)
+#      * user= trellimport (spage created this user on both test and production)
 #   3. Check that data/trello_names_<HOST>.yaml has up-to-date
 #      Trello_username: Phab_username, mapping the members of the Trello board
 #      you're importing to their Phab username on either the test phab-01 or
@@ -33,7 +34,7 @@
 #             --column 'Send to Phabricator - Collaboration-Team board'
 #       Check the command output.
 #   6b. Do a test-run of trello_create.py to a test project on the test host (this
-#       creates cards named 'TEST RUN: xxx'). Same command-line as above without "--test-run".
+#       creates cards named 'TEST RUN: xxx'). Same command-line as above without "--dry-run".
 #       Check the created tasks in the test project.
 #
 #   7. If it looks good, repeat steps 2-5 to configure for the production Phab

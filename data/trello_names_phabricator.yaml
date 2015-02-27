@@ -1,23 +1,36 @@
-  antoinemusso: hashar
-  benmq: Bencmq
-  dannyhorn1: DannyH
-  erikbernhardson: EBernhardson
-  fflorin: Fabrice_Florin
-  gdubuc: Gilles
-  gtisza: Tgr
-  jaredmzimmerman: Jaredzimmerman-WMF
-  jonrobson1: Jdlrobson
-  kaityhammerstein: KHammerstein
-  legoktm: Legoktm
-  matthewflaschen: Mattflaschen
-  matthiasmullie: matthiasmullie
-  maygalloway: violetto
-  mholmquist: MarkTraceur
-  moizsyed_: MSyed
-  oliverkeyes: Ironholds
-  pauginer: Pginer-WMF
-  pginer: Pginer-WMF
-  quiddity1: Quiddity
-  spage1: Spage
-  wctaiwan: wctaiwan
-  werdnum: werdna
+# Map usernames in Trello to usernames on phab-01.wmflabs.org
+# To get Trello usernames you can use, e.g.
+#   python export_trello.py print-users --trello-file SOMEtrello_board_export.json
+# To get Phabricator usernames you can e.g. go to a project and look for members and CCs.
+trelloUserMap:
+    antoinemusso: hashar
+    benmq: Bencmq
+    dannyhorn1: DannyH
+    dartar: DarTar
+    erikbernhardson: EBernhardson
+    fflorin: Fabrice_Florin
+    gdubuc: Gilles
+    gtisza: Tgr
+    jaredmzimmerman: Jaredzimmerman-WMF
+    jkatzwmf: JKatzWMF
+    joaquin: Jhernandez
+    jonrobson1: Jdlrobson
+    kaityhammerstein: KHammerstein
+    halfak: Halfak
+    kristenlans1: KLans_WMF
+    legoktm: Legoktm
+    maryanapinchuk: Maryana
+    matthewflaschen: Mattflaschen
+    matthiasmullie: matthiasmullie
+    maygalloway: violetto
+    mholmquist: MarkTraceur
+    moizsyed_: MSyed
+    oliverkeyes: Ironholds
+    pauginer: Pginer-WMF
+    pginer: Pginer-WMF
+    phuedx: phuedx
+    quiddity1: Quiddity
+    robm17: rmoen
+    spage1: Spage
+    wctaiwan: wctaiwan
+    werdnum: werdna
