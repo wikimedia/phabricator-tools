@@ -1322,44 +1322,33 @@ def add_task_cc(ticketphid, userphid):
              passwd=phuser_passwd)
 
     # Get json array of subscribers
-    query = "SELECT ccPHIDs FROM \
-           maniphest_task WHERE phid = %s"
-    jcc_list = p.sql_x(query, ticketphid)
+    query = "SELECT dst FROM \
+           edge WHERE src = %s and type=21"
 
+    jcc_list = p.sql_x(query, ticketphid, limit=None)
     if jcc_list is None:
-        util.notice("!Ignoring CC for user %s on issue %s" % (userphid,
-                                                              ticketphid))
-        return
-    cc_list = json.loads(jcc_list[0][0])
+        cc_list = []
+    else:
+        cc_list = util.tflatten(jcc_list)
     if userphid not in cc_list:
-        cc_list.append(userphid)
-    p.sql_x("UPDATE maniphest_task \
-             SET ccPHIDs=%s \
-             WHERE phid=%s", (json.dumps(cc_list), ticketphid))
-    final_jcclist = p.sql_x(query, ticketphid)[0]
-    set_task_subscriber(ticketphid, userphid)
+        set_task_subscriber(ticketphid, userphid)
     p.close()
-    return json.loads(final_jcclist[0])
 
-def set_task_subscriber(taskPHID, userphid):
+def set_task_subscriber(taskPHID, userPHID):
     """ establishes a user as a subscriber of a task
     :param taskPHID: str
     :param userphid: str
     """
+    print 'set_task_sub'
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,
              passwd=phuser_passwd)
+    creation = int(time.time())
 
-    query = "SELECT taskPHID, subscriberPHID \
-             from maniphest_tasksubscriber \
-             where taskPHID=%s and subscriberPHID=%s"
+    p.sql_x("INSERT INTO edge \
+            (src, type, dst, dateCreated, seq) VALUES (%s, %s, %s, %s, %s)",
+            (taskPHID, 21, userPHID, creation, 0))
 
-    existing = p.sql_x(query, (taskPHID, userphid))
-    # Note only bad to do dupe inserts columns are UNIQUE
-    if existing is None:
-        p.sql_x("INSERT INTO maniphest_tasksubscriber \
-                 (taskPHID, subscriberPHID) VALUES (%s, %s)",
-                 (taskPHID, userphid))
     p.close()
 
 
