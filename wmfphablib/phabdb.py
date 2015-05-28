@@ -20,6 +20,116 @@ from config import bzmigrate_db
 from config import bzmigrate_user
 from config import bzmigrate_passwd
 
+def get_projectcolumns():
+    p = phdb(db='phabricator_project',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT id, \
+                        phid, \
+                        name, \
+                        status, \
+                        sequence, \
+                        projectPHID, \
+                        dateCreated, \
+                        dateModified, \
+                        properties \
+                FROM project_column",
+                (), limit=None)
+    p.close()
+    return _
+
+
+def get_projectpolicy(projectPHID):
+    p = phdb(db='phabricator_project',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT viewPolicy \
+                FROM project WHERE phid=%s",
+                (projectPHID), limit=None)
+    p.close()
+    if _ is not None and len(_[0]) > 0:
+        return _[0][0]
+
+def get_projectbypolicy(policy='public'):
+    p = phdb(db='phabricator_project',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT id, \
+                        name, \
+                        phid, \
+                        dateCreated, \
+                        dateModified, \
+                        icon, \
+                        color \
+                FROM project WHERE viewPolicy=%s",
+                (policy), limit=None)
+    p.close()
+    return _
+
+def get_edgebysrc(src):
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT src, \
+                        type, \
+                        dst, \
+                        dateCreated, \
+                        seq, \
+                        dataID \
+                FROM edge WHERE src=%s",
+                (src), limit=None)
+    p.close()
+    return _
+
+def get_transactionbytype(objectPHID, type):
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT id, \
+                        phid, \
+                        authorPHID, \
+                        objectPHID, \
+                        commentPHID, \
+                        commentVersion, \
+                        transactionType, \
+                        oldValue, \
+                        newValue, \
+                        metadata, \
+                        dateCreated, \
+                        dateModified \
+                FROM maniphest_transaction WHERE objectPHID=%s AND transactionType=%s",
+                (objectPHID, type), limit=None)
+    p.close()
+    return _
+
+def get_taskbypolicy(policy='public'):
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+    _ = p.sql_x("SELECT id, \
+                        phid, \
+                        authorPHID, \
+                        ownerPHID, \
+                        attached, \
+                        status, \
+                        priority, \
+                        title, \
+                        description, \
+                        dateCreated, \
+                        dateModified, \
+                        projectPHIDs, \
+                        subpriority \
+                FROM maniphest_task WHERE viewPolicy=%s",
+
+                (policy), limit=None)
+    p.close()
+    return _
+
 
 def get_user_relations_last_finish(dbcon):
     """ get last finish time for update script
