@@ -69,6 +69,21 @@ def get_projectbypolicy(policy='public'):
     p.close()
     return _
 
+def get_storypoints(taskPHID):
+
+    p = phdb(db='phabricator_maniphest',
+             user=phuser_user,
+             passwd=phuser_passwd)
+
+    _ = p.sql_x("SELECT id, \
+                        objectPHID, \
+                        indexValue \
+                FROM maniphest_customfieldstringindex \
+                WHERE indexKey=%s AND  objectPHID=%s",
+                ('yERhvoZPNPtM', taskPHID), limit=None)
+    p.close()
+    return _
+
 def get_edgebysrc(src):
     p = phdb(db='phabricator_maniphest',
              user=phuser_user,

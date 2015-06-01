@@ -32,6 +32,9 @@ for task in phabdb.get_taskbypolicy():
                     and phabdb.get_projectpolicy(edge[2]) == 'public']
     taskdata[id]['edge'] = filter(bool, edge_allowed)
 
+    taskdata[id]['storypoints'] = phabdb.get_storypoints(task[1])
+
+
 data['task'] = taskdata
 data['project'] = {}
 data['project']['projects'] = phabdb.get_projectbypolicy(policy='public')
