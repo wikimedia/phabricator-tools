@@ -82,7 +82,8 @@ def get_storypoints(taskPHID):
                 WHERE indexKey=%s AND  objectPHID=%s",
                 ('yERhvoZPNPtM', taskPHID), limit=None)
     p.close()
-    return _
+    if _ is not None and len(_[0]) > 0:
+        return _[0]
 
 def get_edgebysrc(src):
     p = phdb(db='phabricator_maniphest',
