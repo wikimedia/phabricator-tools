@@ -135,7 +135,6 @@ def get_taskbypolicy(policy='public'):
                         status, \
                         priority, \
                         title, \
-                        description, \
                         dateCreated, \
                         dateModified, \
                         projectPHIDs, \

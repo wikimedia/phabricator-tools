@@ -17,6 +17,7 @@ taskdata = {}
 for task in phabdb.get_taskbypolicy():
     id = task[0]
     taskdata[id] = {}
+    taskdata[id]['info'] = task
 
     taskdata[id]['storypoints'] = phabdb.get_storypoints(task[1]) or ''
 
