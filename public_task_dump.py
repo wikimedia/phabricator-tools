@@ -11,7 +11,8 @@ from wmfphablib import util
 transactions = ['projectcolumn',
                 'priority',
                 'status',
-                'reassign']
+                'reassign',
+                'core:edge']
 
 data = {}
 taskdata = {}
