@@ -10,6 +10,7 @@ import ConfigParser
 parser = ConfigParser.SafeConfigParser()
 parser.read(cfile)
 dbhost = parser.get('general', 'dbhost')
+dbslave = parser.get('general', 'dbslave')
 file_upload_timeout = int(parser.get('general', 'file_upload_timeout'))
 parser_mode = 'phmanifest'
 phmanifest_user = parser.get(parser_mode, 'user')
@@ -98,4 +99,3 @@ if __name__ == '__main__':
     print rt_url
     print rt_login
     print rt_passwd
-

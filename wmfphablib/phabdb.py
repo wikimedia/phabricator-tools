@@ -9,6 +9,7 @@ import time
 import util
 import bzlib
 from config import dbhost
+from config import dbslave
 from config import phmanifest_user
 from config import phmanifest_passwd
 from config import phuser_user
@@ -20,12 +21,8 @@ from config import bzmigrate_db
 from config import bzmigrate_user
 from config import bzmigrate_passwd
 
-def get_projectcolumns():
-    p = phdb(db='phabricator_project',
-             user=phuser_user,
-             passwd=phuser_passwd)
-
-    _ = p.sql_x("SELECT id, \
+def get_projectcolumns(dbcon):
+    _ = dbcon.sql_x("SELECT id, \
                         phid, \
                         name, \
                         status, \
@@ -36,28 +33,18 @@ def get_projectcolumns():
                         properties \
                 FROM project_column",
                 (), limit=None)
-    p.close()
     return _
 
 
-def get_projectpolicy(projectPHID):
-    p = phdb(db='phabricator_project',
-             user=phuser_user,
-             passwd=phuser_passwd)
-
-    _ = p.sql_x("SELECT viewPolicy \
+def get_projectpolicy(dbcon, projectPHID):
+    _ = dbcon.sql_x("SELECT viewPolicy \
                 FROM project WHERE phid=%s",
                 (projectPHID), limit=None)
-    p.close()
     if _ is not None and len(_[0]) > 0:
         return _[0][0]
 
-def get_projectbypolicy(policy='public'):
-    p = phdb(db='phabricator_project',
-             user=phuser_user,
-             passwd=phuser_passwd)
-
-    _ = p.sql_x("SELECT id, \
+def get_projectbypolicy(dbcon, policy='public'):
+    _ = dbcon.sql_x("SELECT id, \
                         name, \
                         phid, \
                         dateCreated, \
@@ -66,31 +53,20 @@ def get_projectbypolicy(policy='public'):
                         color \
                 FROM project WHERE viewPolicy=%s",
                 (policy), limit=None)
-    p.close()
     return _
 
-def get_storypoints(taskPHID):
-
-    p = phdb(db='phabricator_maniphest',
-             user=phuser_user,
-             passwd=phuser_passwd)
-
-    _ = p.sql_x("SELECT id, \
+def get_storypoints(dbcon, taskPHID):
+    _ = dbcon.sql_x("SELECT id, \
                         objectPHID, \
                         indexValue \
                 FROM maniphest_customfieldstringindex \
                 WHERE indexKey=%s AND  objectPHID=%s",
                 ('yERhvoZPNPtM', taskPHID), limit=None)
-    p.close()
     if _ is not None and len(_[0]) > 0:
         return _[0]
 
-def get_edgebysrc(src):
-    p = phdb(db='phabricator_maniphest',
-             user=phuser_user,
-             passwd=phuser_passwd)
-
-    _ = p.sql_x("SELECT src, \
+def get_edgebysrc(dbcon, src):
+    _ = dbcon.sql_x("SELECT src, \
                         type, \
                         dst, \
                         dateCreated, \
@@ -98,15 +74,10 @@ def get_edgebysrc(src):
                         dataID \
                 FROM edge WHERE src=%s",
                 (src), limit=None)
-    p.close()
     return _
 
-def get_transactionbytype(objectPHID, type):
-    p = phdb(db='phabricator_maniphest',
-             user=phuser_user,
-             passwd=phuser_passwd)
-
-    _ = p.sql_x("SELECT id, \
+def get_transactionbytype(dbcon, objectPHID, type):
+    _ = dbcon.sql_x("SELECT id, \
                         phid, \
                         authorPHID, \
                         objectPHID, \
@@ -120,14 +91,10 @@ def get_transactionbytype(objectPHID, type):
                         dateModified \
                 FROM maniphest_transaction WHERE objectPHID=%s AND transactionType=%s",
                 (objectPHID, type), limit=None)
-    p.close()
     return _
 
-def get_taskbypolicy(policy='public'):
-    p = phdb(db='phabricator_maniphest',
-             user=phuser_user,
-             passwd=phuser_passwd)
-    _ = p.sql_x("SELECT id, \
+def get_taskbypolicy(dbcon, policy='public'):
+    _ = dbcon.sql_x("SELECT id, \
                         phid, \
                         authorPHID, \
                         ownerPHID, \
@@ -142,7 +109,6 @@ def get_taskbypolicy(policy='public'):
                 FROM maniphest_task WHERE viewPolicy=%s",
 
                 (policy), limit=None)
-    p.close()
     return _
 
 
@@ -299,7 +265,7 @@ def get_user_relations_comments_priority(user, dbcon):
     """
     return dbcon.sql_x("SELECT priority \
                        from user_relations_comments \
-                       where user = %s", 
+                       where user = %s",
                        user)
 
 def set_user_relations_priority(priority, user, dbcon):
@@ -467,7 +433,7 @@ def set_transaction_time(transxphid, metatime):
              SET dateModified=%s WHERE phid=%s",
              (metatime, transxphid))
     p.sql_x("UPDATE maniphest_transaction \
-             SET dateCreated=%s WHERE phid=%s", 
+             SET dateCreated=%s WHERE phid=%s",
              (metatime, transxphid))
     p.close()
 
@@ -759,13 +725,13 @@ def get_policy(phid):
 
 def add_task_policy_users(taskPHID,
                           users=[]):
-    
+
     """add phid to task policy
     :param taskPHID: str
     :param users: list of user PHIDs
 
     notes: This should be used only to fixup
-    specifically tickets for whom 
+    specifically tickets for whom
     all VIEWERS are trustable with EDITABLE permissions.
     """
 
@@ -954,7 +920,7 @@ def set_task_title_transaction(taskPHID,
     :note:
         * source must match a valid upstream type
         * this crutches an inconsistency where tasks
-          created via the UI are assigned these 
+          created via the UI are assigned these
           transactions and via conduit are not.
     """
 
@@ -1478,17 +1444,27 @@ def set_task_subscriber(taskPHID, userPHID):
 
 
 class phdb:
-    def __init__(self, host = dbhost,
-                       user = phuser_user,
-                       passwd = phuser_passwd,
-                       db = "phab_migration",
-                       charset = 'utf8',):
+    def __init__(self,
+                 host = dbhost,
+                 user = phuser_user,
+                 passwd = phuser_passwd,
+                 db = "phab_migration",
+                 charset = 'utf8',):
 
-        self.conn = MySQLdb.connect(host=host,
-                                user=user,
-                                passwd=passwd,
-                                db=db,
-                                charset=charset)
+        self.dbhost = host
+        self.user = user
+        self.passwd = passwd
+        self.db = db
+        self.charset = charset
+        self.conn = self.connect()
+
+    def connect(self):
+        return MySQLdb.connect(host=self.dbhost,
+                               user=self.user,
+                               passwd=self.passwd,
+                               db=self.db,
+                               charset=self.charset)
+
     #print sql_x("SELECT * FROM bugzilla_meta WHERE id = %s", (500,))
     def sql_x(self, statement, arguments, limit=1):
         x = self.conn.cursor()
