@@ -26,25 +26,35 @@ pdb = dbcon('phabricator_project')
 
 data = {}
 taskdata = {}
-for task in phabdb.get_taskbypolicy(mdb):
+tasks = phabdb.get_taskbypolicy(mdb)
+# cache a list of public phids
+task_phids = [id[1] for id in tasks]
+
+for task in tasks:
     id = task[0]
     taskdata[id] = {}
     taskdata[id]['info'] = task
-
     taskdata[id]['storypoints'] = phabdb.get_storypoints(mdb, task[1]) or ''
-
     taskdata[id]['transactions'] = {}
-    for t in transactions:
-	        taskdata[id]['transactions'][t] = phabdb.get_transactionbytype(mdb, task[1], t)
 
-    #('PHID-TASK-uegpsibvtzahh2n4efok', 21L, 'PHID-USER-7t36l5d3llsm5abqfx3u', 1426191381L, 0L, None)
-    # There are a few types of edge relationships, some of them we are not going to
-    # account for here as the current need is project based data.  Thus if we see a relationship
-    # with a project and that project is public then include it.
+    for t in transactions:
+                taskdata[id]['transactions'][t] = phabdb.get_transactionbytype(mdb, task[1], t)
+
+    # ('PHID-TASK-uegpsibvtzahh2n4efok', 21L, 'PHID-USER-7t36l5d3llsm5abqfx3u', 1426191381L, 0L, None)
+    # There are a few types of edge relationships, we want only publicly available relationships
     edges = phabdb.get_edgebysrc(mdb, task[1])
-    edge_allowed = [edge for edge in edges \
-                    if edge[2].startswith('PHID-PROJ') \
-                    and phabdb.get_projectpolicy(pdb, edge[2]) == 'public']
+    if not edges:
+        continue
+
+    edge_allowed = []
+    for edge in edges:
+        if edge[2].startswith('PHID-PROJ'):
+            if phabdb.get_projectpolicy(pdb, edge[2]) == 'public':
+                edge_allowed.append(edge)
+        if edge[2].startswith('PHID-TASK'):
+            # we compare to a our known good list of public tasks
+            if edge[2] in task_phids:
+                edge_allowed.append(edge)
     taskdata[id]['edge'] = filter(bool, edge_allowed)
 
 data['task'] = taskdata
