@@ -98,13 +98,11 @@ def get_taskbypolicy(dbcon, policy='public'):
                         phid, \
                         authorPHID, \
                         ownerPHID, \
-                        attached, \
                         status, \
                         priority, \
                         title, \
                         dateCreated, \
                         dateModified, \
-                        projectPHIDs, \
                         subpriority \
                 FROM maniphest_task WHERE viewPolicy=%s",
 
