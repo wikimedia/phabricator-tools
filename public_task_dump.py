@@ -9,7 +9,7 @@ from wmfphablib import config as c
 # Some transaction types are unsafe to reveal as they
 # contain hidden information in their history and possible
 # unsafe secrets we have dealt with in the UI context
-transactions = ['columns',
+transactions = ['core:columns',
                 'priority',
                 'status',
                 'reassign',
