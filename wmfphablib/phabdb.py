@@ -103,7 +103,8 @@ def get_taskbypolicy(dbcon, policy='public'):
                         title, \
                         dateCreated, \
                         dateModified, \
-                        subpriority \
+                        subpriority, \
+                        points \
                 FROM maniphest_task WHERE viewPolicy=%s",
 
                 (policy), limit=None)

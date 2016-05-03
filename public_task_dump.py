@@ -11,6 +11,7 @@ from wmfphablib import config as c
 # unsafe secrets we have dealt with in the UI context
 transactions = ['core:columns',
                 'priority',
+                'points',
                 'status',
                 'reassign',
                 'core:edge']
@@ -34,7 +35,7 @@ for task in tasks:
     id = task[0]
     taskdata[id] = {}
     taskdata[id]['info'] = task
-    taskdata[id]['storypoints'] = phabdb.get_storypoints(mdb, task[1]) or ''
+    #taskdata[id]['storypoints'] = phabdb.get_storypoints(mdb, task[1]) or ''
     taskdata[id]['transactions'] = {}
 
     for t in transactions:
