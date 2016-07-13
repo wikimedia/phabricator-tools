@@ -93,7 +93,14 @@ def get_transactionbytype(dbcon, objectPHID, type):
                 (objectPHID, type), limit=None)
     return _
 
-def get_taskbypolicy(dbcon, policy='public'):
+def get_taskbypolicy(dbcon, policy='public', space_phid='PHID-SPCE-6l6g5p53yi3mypnlpxjw'):
+    """ get tasks matching a specified policy
+    :param policy: the phabricator view policy identifier
+    :param space_phid: the phid of the 'public' space. Defaults to the phid value
+                       from Wikimedia's production phabricator instance.
+    """
+    # Note:
+    # space_phid is set to NULL for public tasks that were created before the spaces feature existed.
     _ = dbcon.sql_x("SELECT id, \
                         phid, \
                         authorPHID, \
@@ -105,11 +112,10 @@ def get_taskbypolicy(dbcon, policy='public'):
                         dateModified, \
                         subpriority, \
                         points \
-                FROM maniphest_task WHERE viewPolicy=%s",
-
-                (policy), limit=None)
+                FROM maniphest_task WHERE viewPolicy=%s \
+                AND (spacePHID=%s OR spacePHID IS NULL)",
+                (policy, space_phid), limit=None)
     return _
-
 
 def get_user_relations_last_finish(dbcon):
     """ get last finish time for update script
