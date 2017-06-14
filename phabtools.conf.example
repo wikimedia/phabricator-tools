@@ -41,6 +41,8 @@ fetch_multi = 40
 create_multi = 3
 update_limit = 30
 update_multi = 10
+# TODO pick better default
+update_lookback = 999
 populate_multi = 6
 security = false
 
