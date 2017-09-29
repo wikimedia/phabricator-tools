@@ -4,7 +4,6 @@ import util
 try:
     from rtppl import ppl as users
 except:
-    util.notice("rtppl not found!")
     users = {}
 import re
 from datetime import datetime
