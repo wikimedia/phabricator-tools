@@ -10,7 +10,9 @@ import ConfigParser
 parser = ConfigParser.SafeConfigParser()
 parser.read(cfile)
 dbhost = parser.get('general', 'dbhost')
+dbport = parser.get('general', 'dbport')
 dbslave = parser.get('general', 'dbslave')
+slaveport = parser.get('general', 'slaveport')
 file_upload_timeout = int(parser.get('general', 'file_upload_timeout'))
 parser_mode = 'phmanifest'
 phmanifest_user = parser.get(parser_mode, 'user')
