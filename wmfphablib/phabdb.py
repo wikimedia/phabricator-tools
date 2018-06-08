@@ -1537,7 +1537,7 @@ class phdb:
                                passwd=self.passwd,
                                db=self.db,
                                charset=self.charset,
-                               port=self.port)
+                               port=int(self.port))
 
     # print sql_x("SELECT * FROM bugzilla_meta WHERE id = %s", (500,))
     def sql_x(self, statement, arguments, limit=1):
