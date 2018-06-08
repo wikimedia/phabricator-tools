@@ -1528,8 +1528,8 @@ class phdb:
         self.passwd = passwd
         self.db = db
         self.charset = charset
-        self.conn = self.connect()
         self.port = port
+        self.conn = self.connect()
 
     def connect(self):
         return MySQLdb.connect(host=self.dbhost,
