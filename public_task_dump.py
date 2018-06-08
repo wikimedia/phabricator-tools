@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-import os
-import sys
+
 import json
 from wmfphablib import phabdb
-from wmfphablib import util
 from wmfphablib import config as c
 
 # Some transaction types are unsafe to reveal as they
@@ -16,9 +14,11 @@ transactions = ['core:columns',
                 'reassign',
                 'core:edge']
 
+
 def dbcon(db):
     return phabdb.phdb(db=db,
                        host=c.dbslave,
+                       port=c.slaveport,
                        user=c.phuser_user,
                        passwd=c.phuser_passwd)
 
@@ -35,14 +35,14 @@ for task in tasks:
     id = task[0]
     taskdata[id] = {}
     taskdata[id]['info'] = task
-    #taskdata[id]['storypoints'] = phabdb.get_storypoints(mdb, task[1]) or ''
     taskdata[id]['transactions'] = {}
 
     for t in transactions:
-                taskdata[id]['transactions'][t] = phabdb.get_transactionbytype(mdb, task[1], t)
+        taskdata[id]['transactions'][t] = phabdb.get_transactionbytype(
+            mdb, task[1], t)
 
-    # ('PHID-TASK-uegpsibvtzahh2n4efok', 21L, 'PHID-USER-7t36l5d3llsm5abqfx3u', 1426191381L, 0L, None)
-    # There are a few types of edge relationships, we want only publicly available relationships
+    # There are a few types of edge relationships, we want only publicly
+    # available relationships
     edges = phabdb.get_edgebysrc(mdb, task[1])
     if not edges:
         continue

@@ -1,5 +1,8 @@
 [general]
 dbhost = localhost
+dbslave = localhost
+dbport = 3306
+slaveport = 3323
 file_upload_timeout = 120
 
 [phmanifest]
